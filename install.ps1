@@ -76,7 +76,22 @@ if (Test-Path $TabsFile) {
     }
 }
 
-# 4. Verify mod
+# 4. Add Azure DevOps to new-menu
+$NewMenuFile = "$HerdrHome\mods\new-menu\main.js"
+if (Test-Path $NewMenuFile) {
+    $menuContent = Get-Content -Raw $NewMenuFile
+    if ($menuContent -notmatch '"ado-tab"') {
+        $targetMenu = '.child(this.row("terminal", svg("icons/shell.svg").size(14), "Terminal", () => run("tab.new", { space: space?.id }), shortcut("tab.new")))'
+        $newMenuItem = "$targetMenu`n      .child(this.row(`"ado-tab`", svg(`"mods/azure-devops/assets/ado.svg`").size(14), `"Azure DevOps`", () => run(`"tab.new`", { name: `"Azure DevOps`", space: space?.id, mod: `"azure-devops`" })))"
+        if ($menuContent.Contains($targetMenu)) {
+            $menuContent = $menuContent.Replace($targetMenu, $newMenuItem)
+            Set-Content -Path $NewMenuFile -Value $menuContent -Encoding utf8
+            Write-Host "Added Azure DevOps to mods/new-menu/main.js"
+        }
+    }
+}
+
+# 5. Verify mod
 if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
     herdr-app check $TargetModDir
     Write-Host "Mod check passed."

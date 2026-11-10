@@ -69,7 +69,16 @@ if [ -f "$TABS_FILE" ]; then
     fi
 fi
 
-# 4. Verify mod
+# 4. Add Azure DevOps to new-menu
+NEW_MENU_FILE="$HERDR_HOME/mods/new-menu/main.js"
+if [ -f "$NEW_MENU_FILE" ]; then
+    if ! grep -q '"ado-tab"' "$NEW_MENU_FILE"; then
+        sed -i 's/\(this\.row("terminal"[^)]*)\)/\1\n      .child(this.row("ado-tab", svg("mods\/azure-devops\/assets\/ado.svg").size(14), "Azure DevOps", () => run("tab.new", { name: "Azure DevOps", space: space?.id, mod: "azure-devops" })))/' "$NEW_MENU_FILE" || true
+        echo "Added Azure DevOps to mods/new-menu/main.js"
+    fi
+fi
+
+# 5. Verify mod
 if command -v herdr-app >/dev/null 2>&1; then
     herdr-app check "$TARGET_MOD_DIR"
     echo "Mod validation check passed."

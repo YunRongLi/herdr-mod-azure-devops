@@ -1,6 +1,6 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { theme } from "herdr";
+import { theme, run } from "herdr";
 import {
   loadConfig,
   getActiveProfile,
@@ -199,6 +199,12 @@ export default class AzureDevOpsMod extends View {
       onOpenSettings: () => {
         this.showingSettings = true;
         this.isProfileMenuOpen = false;
+      },
+      onOpenAsTab: () => {
+        run("tab.new", { name: "Azure DevOps", mod: "azure-devops" });
+      },
+      onSplitPane: () => {
+        run("pane.split", { direction: "right", mod: "azure-devops" });
       },
       loading: this.loading,
       profiles: config.profiles,

@@ -3,13 +3,15 @@ import { h_flex, v_flex } from "gpui-base";
 import { theme } from "herdr";
 
 /**
- * Top navigation and control header with multi-profile switcher.
+ * Top navigation and control header with multi-profile switcher and GUI layout actions.
  *
  * @param {Object} props
  * @param {"prs" | "workitems"} props.mode Current active tab
  * @param {(mode: "prs" | "workitems") => void} props.onModeChange Mode switcher callback
  * @param {() => void} props.onRefresh Refresh trigger callback
  * @param {() => void} props.onOpenSettings Settings view opener callback
+ * @param {() => void} [props.onOpenAsTab] Open as dedicated tab callback
+ * @param {() => void} [props.onSplitPane] Split beside active pane callback
  * @param {boolean} [props.loading] Whether a fetch operation is active
  * @param {Array<import("../config.js").AdoProfile>} [props.profiles] List of configured profiles
  * @param {string} [props.activeProfileId] Active profile ID
@@ -22,6 +24,8 @@ export function renderHeader({
   onModeChange,
   onRefresh,
   onOpenSettings,
+  onOpenAsTab = () => {},
+  onSplitPane = () => {},
   loading = false,
   profiles = [],
   activeProfileId = "",
@@ -165,6 +169,8 @@ export function renderHeader({
           h_flex()
             .gap(2)
             .items_center()
+            .child(iconAction("btn-header-tab", "assets/tab.svg", "Open as Tab", onOpenAsTab))
+            .child(iconAction("btn-header-split", "assets/split.svg", "Split Pane Beside Terminal", onSplitPane))
             .child(iconAction("btn-header-refresh", "assets/refresh.svg", "Refresh", onRefresh, loading))
             .child(iconAction("btn-header-settings", "assets/settings.svg", "Settings", onOpenSettings))
         )
