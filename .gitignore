@@ -1,0 +1,15 @@
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Herdr runtime artifacts
+*.error
+*.reset-*
+*.old-*
+*.shot.png
+herdr-shot.png
+
+# Logs
+*.log

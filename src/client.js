@@ -1,0 +1,299 @@
+import { getAccessToken, clearAuthCache } from "./auth.js";
+import { assertSafeAdoUrl } from "./utils.js";
+
+const REQUEST_TIMEOUT_MS = 15000;
+
+/**
+ * Helper to execute an authenticated fetch request against ADO REST API.
+ * Automatically validates URL safety, injects Bearer token, enforces timeout,
+ * and retries once on 401.
+ *
+ * @param {string} url
+ * @param {RequestInit} [options]
+ * @returns {Promise<any>}
+ */
+async function request(url, options = {}) {
+  // Validate URL to prevent Bearer token exfiltration and SSRF
+  assertSafeAdoUrl(url);
+
+  let token = await getAccessToken();
+
+  const makeCall = async (bearerToken) => {
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${bearerToken}`,
+      ...(options.headers || {}),
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      return await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  let response;
+  try {
+    response = await makeCall(token);
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s while contacting Azure DevOps.`);
+    }
+    throw err;
+  }
+
+  // If token expired, clear cache and retry once
+  if (response.status === 401) {
+    clearAuthCache();
+    token = await getAccessToken({ forceRefresh: true });
+    try {
+      response = await makeCall(token);
+    } catch (err) {
+      if (err.name === "AbortError") {
+        throw new Error(`Retry request timed out after ${REQUEST_TIMEOUT_MS / 1000}s.`);
+      }
+      throw err;
+    }
+  }
+
+  if (!response.ok) {
+    let message = `Azure DevOps API Error: ${response.status} ${response.statusText}`;
+    try {
+      const errJson = await response.json();
+      if (errJson && typeof errJson.message === "string") {
+        message = errJson.message;
+      }
+    } catch {
+      // Ignore JSON parse error on non-JSON error pages
+    }
+    throw new Error(message);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Gets the authenticated user's connection profile and identity.
+ * @param {import("./config.js").AdoConfig} config
+ * @returns {Promise<{ id: string, displayName: string, email: string }>}
+ */
+export async function getCurrentUser(config) {
+  const url = `${config.organization}/_apis/connectionData?api-version=7.1`;
+  const data = await request(url);
+  const user = data.authenticatedUser || {};
+  return {
+    id: user.id || "",
+    displayName: user.providerDisplayName || user.customDisplayName || "User",
+    email: user.mailAddress || "",
+  };
+}
+
+/**
+ * Lists Pull Requests for the configured project.
+ *
+ * @param {import("./config.js").AdoConfig} config
+ * @param {{ filter?: "mine" | "assigned" | "all", userId?: string }} [options]
+ * @returns {Promise<Array<any>>}
+ */
+export async function getPullRequests(config, options = {}) {
+  const { filter = "assigned", userId } = options;
+  const project = encodeURIComponent(config.project);
+  let query = `searchCriteria.status=active&api-version=7.1&$top=50`;
+
+  if (userId) {
+    if (filter === "mine") {
+      query += `&searchCriteria.creatorId=${encodeURIComponent(userId)}`;
+    } else if (filter === "assigned") {
+      query += `&searchCriteria.reviewerId=${encodeURIComponent(userId)}`;
+    }
+  }
+
+  const url = `${config.organization}/${project}/_apis/git/pullrequests?${query}`;
+  const data = await request(url);
+  return (data.value || []).map((pr) => ({
+    id: pr.pullRequestId,
+    title: pr.title || `PR #${pr.pullRequestId}`,
+    description: pr.description || "",
+    status: pr.status,
+    author: pr.createdBy?.displayName || "Unknown",
+    authorId: pr.createdBy?.id,
+    authorAvatar: pr.createdBy?._links?.avatar?.href,
+    repositoryId: pr.repository?.id,
+    repositoryName: pr.repository?.name,
+    sourceBranch: (pr.sourceRefName || "").replace("refs/heads/", ""),
+    targetBranch: (pr.targetRefName || "").replace("refs/heads/", ""),
+    creationDate: pr.creationDate,
+    url: pr._links?.web?.href || `${config.organization}/${project}/_git/${encodeURIComponent(pr.repository?.name || "")}/pullrequest/${pr.pullRequestId}`,
+  }));
+}
+
+/**
+ * Retrieves review comment threads for a Pull Request.
+ *
+ * @param {import("./config.js").AdoConfig} config
+ * @param {{ repositoryId: string, pullRequestId: number }} params
+ * @returns {Promise<Array<any>>}
+ */
+export async function getPullRequestThreads(config, { repositoryId, pullRequestId }) {
+  const project = encodeURIComponent(config.project);
+  const repoId = encodeURIComponent(repositoryId);
+  const prId = encodeURIComponent(String(pullRequestId));
+  const url = `${config.organization}/${project}/_apis/git/repositories/${repoId}/pullRequests/${prId}/threads?api-version=7.1`;
+  const data = await request(url);
+
+  return (data.value || [])
+    .filter((t) => !t.isDeleted && t.comments && t.comments.length > 0)
+    .map((thread) => {
+      const isSystem = thread.comments.every((c) => c.commentType === "system");
+      return {
+        id: thread.id,
+        status: thread.status || "active",
+        isSystem,
+        filePath: thread.threadContext?.filePath || null,
+        lineNumber: thread.threadContext?.rightFileStart?.line || null,
+        comments: (thread.comments || [])
+          .filter((c) => !c.isDeleted)
+          .map((c) => ({
+            id: c.id,
+            author: c.author?.displayName || "Unknown",
+            authorAvatar: c.author?._links?.avatar?.href,
+            content: c.content || "",
+            publishedDate: c.publishedDate,
+            commentType: c.commentType,
+          })),
+      };
+    });
+}
+
+/**
+ * Retrieves the modified files and stats for a Pull Request.
+ *
+ * @param {import("./config.js").AdoConfig} config
+ * @param {{ repositoryId: string, pullRequestId: number }} params
+ * @returns {Promise<Array<any>>}
+ */
+export async function getPullRequestChanges(config, { repositoryId, pullRequestId }) {
+  const project = encodeURIComponent(config.project);
+  const repoId = encodeURIComponent(repositoryId);
+  const prId = encodeURIComponent(String(pullRequestId));
+
+  const iterUrl = `${config.organization}/${project}/_apis/git/repositories/${repoId}/pullRequests/${prId}/iterations?api-version=7.1`;
+  const iterData = await request(iterUrl);
+  const iterations = iterData.value || [];
+  if (iterations.length === 0) return [];
+
+  const latestIterationId = iterations[iterations.length - 1].id;
+  const changesUrl = `${config.organization}/${project}/_apis/git/repositories/${repoId}/pullRequests/${prId}/iterations/${latestIterationId}/changes?api-version=7.1&$top=200`;
+  const changesData = await request(changesUrl);
+
+  return (changesData.changeEntries || []).map((entry) => ({
+    path: entry.item?.path || entry.originalPath || "",
+    changeType: entry.changeType || "edit",
+  }));
+}
+
+/**
+ * Lists active Work Items assigned to the current user.
+ *
+ * @param {import("./config.js").AdoConfig} config
+ * @returns {Promise<Array<any>>}
+ */
+export async function getAssignedWorkItems(config) {
+  const project = encodeURIComponent(config.project);
+  const wiqlUrl = `${config.organization}/${project}/_apis/wit/wiql?api-version=7.1`;
+
+  const wiqlQuery = {
+    query: `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType]
+            FROM WorkItems
+            WHERE [System.TeamProject] = @project
+              AND [System.AssignedTo] = @me
+              AND [System.State] <> 'Closed'
+              AND [System.State] <> 'Done'
+              AND [System.State] <> 'Removed'
+            ORDER BY [System.ChangedDate] DESC`,
+  };
+
+  const wiqlResult = await request(wiqlUrl, {
+    method: "POST",
+    body: JSON.stringify(wiqlQuery),
+  });
+
+  const rawIds = (wiqlResult.workItems || [])
+    .slice(0, 50)
+    .map((w) => Number(w.id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  if (rawIds.length === 0) return [];
+
+  const detailsUrl = `${config.organization}/_apis/wit/workitems?ids=${rawIds.join(",")}&$expand=all&api-version=7.1`;
+  const detailsData = await request(detailsUrl);
+
+  return (detailsData.value || []).map((item) => {
+    const f = item.fields || {};
+    return {
+      id: item.id,
+      title: f["System.Title"] || `Work Item #${item.id}`,
+      type: f["System.WorkItemType"] || "Item",
+      state: f["System.State"] || "New",
+      assignedTo: f["System.AssignedTo"]?.displayName || "Unassigned",
+      areaPath: f["System.AreaPath"] || "",
+      iterationPath: f["System.IterationPath"] || "",
+      createdDate: f["System.CreatedDate"],
+      changedDate: f["System.ChangedDate"],
+      url: item._links?.html?.href || `${config.organization}/${project}/_workitems/edit/${item.id}`,
+    };
+  });
+}
+
+/**
+ * Retrieves full details and comments for a specific Work Item.
+ *
+ * @param {import("./config.js").AdoConfig} config
+ * @param {number} workItemId
+ * @returns {Promise<{ item: any, comments: Array<any> }>}
+ */
+export async function getWorkItemDetail(config, workItemId) {
+  const id = Number(workItemId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error(`Invalid work item ID: '${workItemId}'`);
+  }
+
+  const project = encodeURIComponent(config.project);
+  const itemUrl = `${config.organization}/_apis/wit/workitems/${id}?$expand=all&api-version=7.1`;
+  const itemData = await request(itemUrl);
+
+  const f = itemData.fields || {};
+  const item = {
+    id: itemData.id,
+    title: f["System.Title"] || `Work Item #${itemData.id}`,
+    type: f["System.WorkItemType"] || "Item",
+    state: f["System.State"] || "New",
+    description: f["System.Description"] || f["Microsoft.VSTS.Common.AcceptanceCriteria"] || "No description provided.",
+    assignedTo: f["System.AssignedTo"]?.displayName || "Unassigned",
+    url: itemData._links?.html?.href || `${config.organization}/${project}/_workitems/edit/${itemData.id}`,
+  };
+
+  let comments = [];
+  try {
+    const commentsUrl = `${config.organization}/${project}/_apis/wit/workitems/${id}/comments?api-version=7.1-preview.3&$top=50`;
+    const commentsData = await request(commentsUrl);
+    comments = (commentsData.comments || []).map((c) => ({
+      id: c.id,
+      author: c.createdBy?.displayName || "Unknown",
+      text: c.text || "",
+      createdDate: c.createdDate,
+    }));
+  } catch {
+    comments = [];
+  }
+
+  return { item, comments };
+}
