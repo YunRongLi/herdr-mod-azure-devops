@@ -9,6 +9,7 @@ Monitor, inspect, and interact with Azure DevOps Pull Requests and Work Items di
 - Zero External Runtimes: Pure JavaScript (ES Modules). No Python, Node.js, or npm dependencies.
 - Zero-PAT Policy: Transparently uses your host `az login` OAuth session.
 - First-Use Onboarding: In-panel settings configuration view to set Organization URL and Project.
+- Tab Bar Integration: Dockable sidebar with a top-bar `DevOps` button next to Files and Changes.
 - Pull Requests Inspector:
   - Filter by "Assigned to Me" and "Created by Me".
   - Drill down into review comment threads with file paths and line numbers.
@@ -19,28 +20,36 @@ Monitor, inspect, and interact with Azure DevOps Pull Requests and Work Items di
 - One-Click Agent Delegation:
   - "Solve with Agent" dispatches formatted task prompts directly into a new Herdr agent tab (`tab.new`) or active terminal (`hc send`).
 
-## Installation
+## Quick Install (Automated)
 
-### Linux
-Symlink this repository into your Herdr mods directory:
+The installation scripts automatically link the mod, register the panel block in `layouts/main.json`, and insert the `DevOps` button into your top tab bar:
+
+### Linux / macOS
 ```bash
-ln -s "$(pwd)" ~/.config/herdr-app/mods/azure-devops
+git clone https://github.com/YunRongLi/herdr-mod-azure-devops.git ~/herdr-mod-azure-devops
+cd ~/herdr-mod-azure-devops
+./install.sh
 ```
 
 ### Windows (PowerShell)
 ```powershell
-New-Item -ItemType SymbolicLink -Path "$HOME\.config\herdr-app\mods\azure-devops" -Target (Get-Location)
+git clone https://github.com/YunRongLi/herdr-mod-azure-devops.git "$HOME\herdr-mod-azure-devops"
+cd "$HOME\herdr-mod-azure-devops"
+.\install.ps1
 ```
 
-## Validation
+## Manual Installation (Alternative)
 
-Verify mod structure using the Herdr CLI:
+### 1. Symlink or copy to Herdr mods directory:
+- Linux: `ln -s "$(pwd)" ~/.config/herdr-app/mods/azure-devops`
+- Windows: `New-Item -ItemType SymbolicLink -Path "$HOME\.config\herdr-app\mods\azure-devops" -Target (Get-Location)`
+
+### 2. Verify:
 ```bash
 herdr-app check ~/.config/herdr-app/mods/azure-devops
 ```
 
-## Open in Herdr
-
+### 3. Open in Herdr:
 - As a Standalone Tab:
   ```bash
   herdr-app do tab.new '{"name":"Azure DevOps","mod":"azure-devops"}'
@@ -49,4 +58,3 @@ herdr-app check ~/.config/herdr-app/mods/azure-devops
   ```bash
   herdr-app do pane.split '{"direction":"right","mod":"azure-devops"}'
   ```
-- Or dock into your layout sidebar `panel-body` stack.
