@@ -7,6 +7,29 @@ const ALLOWED_ADO_HOST_SUFFIXES = [
 ];
 
 /**
+ * Extracts organization name from URL.
+ * Handles:
+ * - https://dev.azure.com/{org}
+ * - https://{org}.visualstudio.com
+ * @param {string} url
+ * @returns {string}
+ */
+export function extractOrgName(url) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.hostname.endsWith(".visualstudio.com")) {
+      return parsed.hostname.split(".")[0];
+    }
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    return segments[0] || "";
+  } catch {
+    const parts = url.trim().split("/").filter(Boolean);
+    return parts[parts.length - 1] || "";
+  }
+}
+
+/**
  * Validates that a URL is a secure HTTPS URL and is a legitimate Azure DevOps host.
  * Protects against Bearer token exfiltration to untrusted servers (SSRF/Credential Leakage).
  *
@@ -107,12 +130,10 @@ export async function openExternalUrl(urlString) {
 
   try {
     if (platform === "windows") {
-      // Use explorer with validated URL
       await exec("cmd", ["/c", "start", "", cleanUrl]);
     } else if (platform === "macos") {
       await exec("open", [cleanUrl]);
     } else {
-      // Linux
       await exec("xdg-open", [cleanUrl]);
     }
   } catch {
@@ -130,9 +151,9 @@ export async function openExternalUrl(urlString) {
 export function sanitizeText(text) {
   if (!text) return "";
   return String(text)
-    .replace(/\0/g, "") // Remove null bytes
-    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "") // Strip ANSI escape codes
-    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // Strip non-printable ASCII control chars
+    .replace(/\0/g, "")
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 }
 
 /**

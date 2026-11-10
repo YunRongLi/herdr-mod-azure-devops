@@ -1,7 +1,12 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
-import { loadConfig, isConfigured } from "./src/config.js";
+import {
+  loadConfig,
+  getActiveProfile,
+  setActiveProfile,
+  isConfigured,
+} from "./src/config.js";
 import {
   getCurrentUser,
   getPullRequests,
@@ -28,6 +33,7 @@ export default class AzureDevOpsMod extends View {
     this.cx = cx;
     this.mode = "prs"; // "prs" | "workitems"
     this.showingSettings = !isConfigured();
+    this.isProfileMenuOpen = false;
 
     this.user = null;
     this.prFilter = "assigned";
@@ -47,6 +53,7 @@ export default class AzureDevOpsMod extends View {
     this.settingsView = new SettingsView({
       onDone: () => {
         this.showingSettings = false;
+        this.isProfileMenuOpen = false;
         this.refresh(cx);
       },
     });
@@ -66,7 +73,13 @@ export default class AzureDevOpsMod extends View {
   refresh(cx) {
     if (this.loading || !isConfigured()) return;
 
-    const config = loadConfig();
+    const profile = getActiveProfile();
+    if (!profile) {
+      this.showingSettings = true;
+      cx.notify();
+      return;
+    }
+
     this.loading = true;
     this.error = null;
     cx.notify();
@@ -75,26 +88,25 @@ export default class AzureDevOpsMod extends View {
       try {
         if (!this.user) {
           try {
-            this.user = await getCurrentUser(config);
+            this.user = await getCurrentUser(profile);
           } catch {
             // User query failed or not critical; proceed with general queries
           }
         }
 
         if (this.mode === "prs") {
-          const prs = await getPullRequests(config, {
+          const prs = await getPullRequests(profile, {
             filter: this.prFilter,
             userId: this.user?.id,
           });
           this.prs = prs;
 
-          // If a PR was selected, refresh its details
           if (this.selectedPR) {
             const updated = prs.find((p) => p.id === this.selectedPR.id) || this.selectedPR;
             await this.loadPRDetails(updated, spawnCx);
           }
         } else {
-          const items = await getAssignedWorkItems(config);
+          const items = await getAssignedWorkItems(profile);
           this.workItems = items;
 
           if (this.selectedWI) {
@@ -112,14 +124,16 @@ export default class AzureDevOpsMod extends View {
   }
 
   async loadPRDetails(pr, cx) {
-    const config = loadConfig();
+    const profile = getActiveProfile();
+    if (!profile) return;
+
     try {
       const [threads, changes] = await Promise.all([
-        getPullRequestThreads(config, {
+        getPullRequestThreads(profile, {
           repositoryId: pr.repositoryId,
           pullRequestId: pr.id,
         }),
-        getPullRequestChanges(config, {
+        getPullRequestChanges(profile, {
           repositoryId: pr.repositoryId,
           pullRequestId: pr.id,
         }),
@@ -135,9 +149,11 @@ export default class AzureDevOpsMod extends View {
   }
 
   async loadWIDetails(item, cx) {
-    const config = loadConfig();
+    const profile = getActiveProfile();
+    if (!profile) return;
+
     try {
-      const detail = await getWorkItemDetail(config, item.id);
+      const detail = await getWorkItemDetail(profile, item.id);
       this.selectedWI = detail.item;
       this.wiComments = detail.comments;
     } catch (err) {
@@ -147,9 +163,21 @@ export default class AzureDevOpsMod extends View {
     }
   }
 
+  switchProfile(profileId, cx) {
+    setActiveProfile(profileId);
+    this.isProfileMenuOpen = false;
+    this.selectedPR = null;
+    this.selectedWI = null;
+    this.user = null;
+    this.prs = [];
+    this.workItems = [];
+    this.refresh(cx);
+  }
+
   render() {
     const t = theme();
     const config = loadConfig();
+    const activeProfile = getActiveProfile();
 
     if (this.showingSettings) {
       return this.settingsView.render();
@@ -163,15 +191,25 @@ export default class AzureDevOpsMod extends View {
           this.selectedPR = null;
           this.selectedWI = null;
           this.error = null;
+          this.isProfileMenuOpen = false;
           this.refresh(this.cx || { notify: () => {} });
         }
       },
       onRefresh: (cx) => this.refresh(cx),
       onOpenSettings: () => {
         this.showingSettings = true;
+        this.isProfileMenuOpen = false;
       },
       loading: this.loading,
-      project: config.project,
+      profiles: config.profiles,
+      activeProfileId: config.activeProfileId,
+      onSelectProfile: (profileId) => {
+        this.switchProfile(profileId, this.cx || { notify: () => {} });
+      },
+      isProfileMenuOpen: this.isProfileMenuOpen,
+      onToggleProfileMenu: () => {
+        this.isProfileMenuOpen = !this.isProfileMenuOpen;
+      },
     });
 
     const errorBanner = this.error
