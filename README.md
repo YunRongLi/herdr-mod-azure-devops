@@ -9,7 +9,7 @@ Monitor, inspect, and interact with Azure DevOps Pull Requests and Work Items di
 - Zero External Runtimes: Pure JavaScript (ES Modules). No Python, Node.js, or npm dependencies.
 - Zero-PAT Policy: Transparently uses your host `az login` OAuth session.
 - First-Use Onboarding: In-panel settings configuration view to set Organization URL and Project.
-- Tab Bar Integration: Dockable sidebar with a top-bar `DevOps` button next to Files and Changes.
+- Sidebar Navigation Integration: Dockable navigation button in the left sidebar alongside Spaces and Agents that auto-opens or switches to your Azure DevOps tab.
 - Pull Requests Inspector:
   - Filter by "Assigned to Me" and "Created by Me".
   - Drill down into review comment threads with file paths and line numbers.
@@ -27,7 +27,7 @@ Monitor, inspect, and interact with Azure DevOps Pull Requests and Work Items di
 
 ## Quick Install (Automated)
 
-The installation scripts automatically link the mod, configure a custom `devops` layout with the `DevOps` button in the top tab bar, and activate it immediately—without modifying any of Herdr's read-only shipped files:
+The installation scripts automatically link the mod, non-destructively patch the active custom layout (preserving any existing mods or user customizations), and activate it immediately—without modifying any of Herdr's read-only shipped files:
 
 ### Linux / macOS
 ```bash
@@ -36,11 +36,35 @@ cd ~/herdr-mod-azure-devops
 ./install.sh
 ```
 
+Advanced options for multi-mod setups:
+```bash
+# Integrate into a specific custom layout:
+./install.sh --layout my-layout
+
+# Install without switching the active layout:
+./install.sh --no-switch
+
+# Clean uninstall without affecting other mods:
+./install.sh --uninstall
+```
+
 ### Windows (PowerShell)
 ```powershell
 git clone https://github.com/YunRongLi/herdr-mod-azure-devops.git "$HOME\herdr-mod-azure-devops"
 cd "$HOME\herdr-mod-azure-devops"
 .\install.ps1
+```
+
+Advanced options for multi-mod setups:
+```powershell
+# Integrate into a specific custom layout:
+.\install.ps1 -Layout "my-layout"
+
+# Install without switching the active layout:
+.\install.ps1 -NoSwitch
+
+# Clean uninstall without affecting other mods:
+.\install.ps1 -Uninstall
 ```
 
 ## Manual Installation (Alternative)
