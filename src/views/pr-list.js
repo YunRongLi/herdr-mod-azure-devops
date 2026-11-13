@@ -71,7 +71,7 @@ export function renderPRList({ prs = [], filter = "assigned", onFilterChange, on
           .justify_between()
           .text_size(10)
           .text_color(t.dim)
-          .child(div().child(`${pr.sourceBranch} → ${pr.targetBranch}`))
+          .child(div().child(`${pr.repositoryName ? `${pr.repositoryName} · ` : ""}${pr.sourceBranch} → ${pr.targetBranch}`))
           .child(div().child(pr.author))
       );
 

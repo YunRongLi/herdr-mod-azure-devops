@@ -4,14 +4,33 @@ import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
 
 /**
+ * Formats a comment timestamp nicely with date and time.
+ * @param {string} dateStr
+ * @returns {string}
+ */
+function formatCommentDate(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString([], {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
  * Renders the review comments and discussion threads for a PR.
+ * Displays newest comments first and oldest comments at the end.
  *
  * @param {Object} props
  * @param {Array<any>} props.threads
  * @param {any} props.pr
  * @param {(thread: any, pr: any) => void} props.onSolveThread
  */
-export function renderPRThreads({ threads, pr, onSolveThread }) {
+export function renderPRThreads({ threads = [], pr, onSolveThread }) {
   const t = theme();
 
   if (!threads || threads.length === 0) {
@@ -22,11 +41,25 @@ export function renderPRThreads({ threads, pr, onSolveThread }) {
       .child("No comment threads found on this Pull Request.");
   }
 
+  // Ensure threads are sorted with newest activity first
+  const sortedThreads = [...threads].sort((a, b) => {
+    const timeA = a.latestActivityTime ?? new Date(a.comments?.[0]?.publishedDate || a.publishedDate || 0).getTime();
+    const timeB = b.latestActivityTime ?? new Date(b.comments?.[0]?.publishedDate || b.publishedDate || 0).getTime();
+    return timeB - timeA || (b.id || 0) - (a.id || 0);
+  });
+
   const threadCard = (thread) => {
     const hasContext = Boolean(thread.filePath);
     const locationText = hasContext
       ? `${thread.filePath}${thread.lineNumber ? `:${thread.lineNumber}` : ""}`
       : "General Discussion";
+
+    // Ensure comments within thread are sorted: newest first, oldest last
+    const sortedComments = [...(thread.comments || [])].sort((a, b) => {
+      const timeA = new Date(a.publishedDate || 0).getTime();
+      const timeB = new Date(b.publishedDate || 0).getTime();
+      return timeB - timeA || (b.id || 0) - (a.id || 0);
+    });
 
     return v_flex()
       .w_full()
@@ -64,6 +97,7 @@ export function renderPRThreads({ threads, pr, onSolveThread }) {
               .bg(t.chrome)
               .border_1()
               .border_color(t.border)
+              .cursor_pointer()
               .hover((s) => s.bg(t.hover).text_color(t.accent || t.foreground))
               .text_size(10)
               .text_color(t.muted)
@@ -79,7 +113,7 @@ export function renderPRThreads({ threads, pr, onSolveThread }) {
           .w_full()
           .gap(6)
           .children(
-            thread.comments.map((comment) =>
+            sortedComments.map((comment) =>
               v_flex()
                 .w_full()
                 .p(6)
@@ -101,11 +135,7 @@ export function renderPRThreads({ threads, pr, onSolveThread }) {
                       div()
                         .text_size(10)
                         .text_color(t.dim)
-                        .child(
-                          comment.publishedDate
-                            ? new Date(comment.publishedDate).toLocaleDateString()
-                            : ""
-                        )
+                        .child(formatCommentDate(comment.publishedDate))
                     )
                 )
                 .child(
@@ -119,5 +149,5 @@ export function renderPRThreads({ threads, pr, onSolveThread }) {
       );
   };
 
-  return v_flex().w_full().gap(4).children(threads.map(threadCard));
+  return v_flex().w_full().gap(4).children(sortedThreads.map(threadCard));
 }

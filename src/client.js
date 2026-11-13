@@ -168,24 +168,39 @@ export async function getPullRequestThreads(config, { repositoryId, pullRequestI
     .filter((t) => !t.isDeleted && t.comments && t.comments.length > 0)
     .map((thread) => {
       const isSystem = thread.comments.every((c) => c.commentType === "system");
+      const comments = (thread.comments || [])
+        .filter((c) => !c.isDeleted)
+        .map((c) => ({
+          id: c.id,
+          author: c.author?.displayName || "Unknown",
+          authorAvatar: c.author?._links?.avatar?.href,
+          content: c.content || "",
+          publishedDate: c.publishedDate,
+          commentType: c.commentType,
+        }))
+        .sort((a, b) => {
+          const timeA = new Date(a.publishedDate || 0).getTime();
+          const timeB = new Date(b.publishedDate || 0).getTime();
+          return timeB - timeA || (b.id || 0) - (a.id || 0);
+        });
+
+      const latestTime = comments.length > 0
+        ? new Date(comments[0].publishedDate || 0).getTime()
+        : new Date(thread.lastUpdatedDate || thread.publishedDate || 0).getTime();
+
       return {
         id: thread.id,
         status: thread.status || "active",
         isSystem,
+        publishedDate: thread.publishedDate,
+        lastUpdatedDate: thread.lastUpdatedDate,
+        latestActivityTime: latestTime,
         filePath: thread.threadContext?.filePath || null,
         lineNumber: thread.threadContext?.rightFileStart?.line || null,
-        comments: (thread.comments || [])
-          .filter((c) => !c.isDeleted)
-          .map((c) => ({
-            id: c.id,
-            author: c.author?.displayName || "Unknown",
-            authorAvatar: c.author?._links?.avatar?.href,
-            content: c.content || "",
-            publishedDate: c.publishedDate,
-            commentType: c.commentType,
-          })),
+        comments,
       };
-    });
+    })
+    .sort((a, b) => (b.latestActivityTime || 0) - (a.latestActivityTime || 0) || (b.id || 0) - (a.id || 0));
 }
 
 /**
