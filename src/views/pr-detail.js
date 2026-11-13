@@ -13,8 +13,8 @@ import { openExternalUrl } from "../utils.js";
  * @param {Array<any>} props.threads PR comment threads
  * @param {Array<any>} props.changes PR changed files
  * @param {"threads" | "changes"} props.subTab Currently active sub-tab
- * @param {(tab: "threads" | "changes") => void} props.onSubTabChange
- * @param {() => void} props.onBack Callback to return to PR list
+ * @param {(tab: "threads" | "changes", cx?: any) => void} props.onSubTabChange
+ * @param {(event?: any, cx?: any) => void} props.onBack Callback to return to PR list
  * @param {(pr: any) => void} props.onSolvePR Callback to dispatch full PR to agent
  * @param {(thread: any, pr: any) => void} props.onSolveThread Callback to dispatch thread to agent
  */
@@ -48,10 +48,13 @@ export function renderPRDetail({
       .items_center()
       .rounded(5)
       .text_size(11)
+      .cursor_pointer()
       .when(active, (el) => el.bg(t.selected))
       .text_color(active ? t.foreground : t.muted)
       .hover((s) => s.bg(active ? t.selected : t.hover))
-      .on_click(() => onSubTabChange(id))
+      .on_click((_e, cx) => {
+        if (onSubTabChange) onSubTabChange(id, cx);
+      })
       .child(label)
       .when(count !== undefined, (el) =>
         el.child(
@@ -112,22 +115,27 @@ export function renderPRDetail({
 
   return v_flex()
     .size_full()
+    .min_h(0)
     .p(12)
     .gap(10)
     .bg(t.chrome)
     .child(
       h_flex()
         .w_full()
+        .flex_none()
         .items_center()
         .justify_between()
         .child(
           h_flex()
             .gap(6)
             .items_center()
+            .cursor_pointer()
             .hover((s) => s.text_color(t.foreground))
             .text_color(t.muted)
             .text_size(12)
-            .on_click(onBack)
+            .on_click((_e, cx) => {
+              if (onBack) onBack(_e, cx);
+            })
             .child("← Back to PRs")
         )
         .child(
@@ -143,6 +151,7 @@ export function renderPRDetail({
                 .bg(t.accent)
                 .text_color(t.foreground)
                 .text_size(11)
+                .cursor_pointer()
                 .hover((s) => s.bg(t.hover))
                 .on_click(() => onSolvePR(pr))
                 .child("Solve with Agent")
@@ -158,6 +167,7 @@ export function renderPRDetail({
                 .border_color(t.border)
                 .text_color(t.muted)
                 .text_size(11)
+                .cursor_pointer()
                 .hover((s) => s.bg(t.hover).text_color(t.foreground))
                 .on_click(handleOpenInBrowser)
                 .child("Open in ADO ↗")
@@ -165,45 +175,9 @@ export function renderPRDetail({
         )
     )
     .child(
-      v_flex()
-        .w_full()
-        .p(10)
-        .rounded(6)
-        .bg(t.background)
-        .border_1()
-        .border_color(t.border)
-        .gap(4)
-        .child(
-          h_flex()
-            .gap(6)
-            .items_center()
-            .child(statusBadge(pr.status, "pr"))
-            .child(
-              div()
-                .text_size(13)
-                .text_color(t.foreground)
-                .child(pr.title)
-            )
-        )
-        .child(
-          div()
-            .text_size(11)
-            .text_color(t.dim)
-            .child(`By ${pr.author} · ${pr.sourceBranch} → ${pr.targetBranch}`)
-        )
-        .when(Boolean(pr.description), (el) =>
-          el.child(
-            div()
-              .mt(4)
-              .text_size(12)
-              .text_color(t.muted)
-              .child(pr.description)
-          )
-        )
-    )
-    .child(
       h_flex()
         .w_full()
+        .flex_none()
         .gap(4)
         .border_b(1)
         .border_color(t.border)
@@ -213,9 +187,49 @@ export function renderPRDetail({
     )
     .child(
       v_flex()
+        .id("pr-detail-scroll")
         .flex_1()
         .w_full()
+        .min_h(0)
         .overflow_y_scrollbar()
+        .gap(8)
+        .child(
+          v_flex()
+            .w_full()
+            .p(10)
+            .rounded(6)
+            .bg(t.background)
+            .border_1()
+            .border_color(t.border)
+            .gap(4)
+            .child(
+              h_flex()
+                .gap(6)
+                .items_center()
+                .child(statusBadge(pr.status, "pr"))
+                .child(
+                  div()
+                    .text_size(13)
+                    .text_color(t.foreground)
+                    .child(pr.title)
+                )
+            )
+            .child(
+              div()
+                .text_size(11)
+                .text_color(t.dim)
+                .child(`By ${pr.author} · ${pr.sourceBranch} → ${pr.targetBranch}`)
+            )
+            .when(Boolean(pr.description), (el) =>
+              el.child(
+                div()
+                  .mt(4)
+                  .text_size(12)
+                  .text_color(t.muted)
+                  .child(pr.description)
+              )
+            )
+        )
         .child(
           subTab === "threads"
             ? renderPRThreads({ threads, pr, onSolveThread })

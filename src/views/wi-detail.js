@@ -30,7 +30,7 @@ function stripHtml(html) {
  * @param {Object} props
  * @param {any} props.item Work item data
  * @param {Array<any>} props.comments Discussion comments
- * @param {() => void} props.onBack Callback to return to list
+ * @param {(event: any, cx: any) => void} props.onBack Callback to return to list
  * @param {(item: any, comments: Array<any>) => void} props.onSolveWithAgent
  */
 export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }) {
@@ -49,22 +49,27 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
 
   return v_flex()
     .size_full()
+    .min_h(0)
     .p(12)
     .gap(10)
     .bg(t.chrome)
     .child(
       h_flex()
         .w_full()
+        .flex_none()
         .items_center()
         .justify_between()
         .child(
           h_flex()
             .gap(6)
             .items_center()
+            .cursor_pointer()
             .hover((s) => s.text_color(t.foreground))
             .text_color(t.muted)
             .text_size(12)
-            .on_click(onBack)
+            .on_click((_e, cx) => {
+              if (onBack) onBack(_e, cx);
+            })
             .child("← Back to Work Items")
         )
         .child(
@@ -80,6 +85,7 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
                 .bg(t.accent)
                 .text_color(t.foreground)
                 .text_size(11)
+                .cursor_pointer()
                 .hover((s) => s.bg(t.hover))
                 .on_click(() => onSolveWithAgent(item, comments))
                 .child("Solve with Agent")
@@ -95,6 +101,7 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
                 .border_color(t.border)
                 .text_color(t.muted)
                 .text_size(11)
+                .cursor_pointer()
                 .hover((s) => s.bg(t.hover).text_color(t.foreground))
                 .on_click(handleOpenInBrowser)
                 .child("Open in ADO ↗")
@@ -103,39 +110,41 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
     )
     .child(
       v_flex()
-        .w_full()
-        .p(10)
-        .rounded(6)
-        .bg(t.background)
-        .border_1()
-        .border_color(t.border)
-        .gap(4)
-        .child(
-          h_flex()
-            .gap(6)
-            .items_center()
-            .child(statusBadge(item.type, "wi"))
-            .child(statusBadge(item.state, "wi"))
-            .child(
-              div()
-                .text_size(13)
-                .text_color(t.foreground)
-                .child(`#${item.id} ${item.title}`)
-            )
-        )
-        .child(
-          div()
-            .text_size(11)
-            .text_color(t.dim)
-            .child(`Assigned to: ${item.assignedTo}`)
-        )
-    )
-    .child(
-      v_flex()
+        .id("wi-detail-scroll")
         .flex_1()
         .w_full()
+        .min_h(0)
         .overflow_y_scrollbar()
         .gap(10)
+        .child(
+          v_flex()
+            .w_full()
+            .p(10)
+            .rounded(6)
+            .bg(t.background)
+            .border_1()
+            .border_color(t.border)
+            .gap(4)
+            .child(
+              h_flex()
+                .gap(6)
+                .items_center()
+                .child(statusBadge(item.type, "wi"))
+                .child(statusBadge(item.state, "wi"))
+                .child(
+                  div()
+                    .text_size(13)
+                    .text_color(t.foreground)
+                    .child(`#${item.id} ${item.title}`)
+                )
+            )
+            .child(
+              div()
+                .text_size(11)
+                .text_color(t.dim)
+                .child(`Assigned to: ${item.assignedTo}`)
+            )
+        )
         .child(
           v_flex()
             .w_full()

@@ -8,7 +8,7 @@ import { statusBadge } from "../components/status-badge.js";
  *
  * @param {Object} props
  * @param {Array<any>} props.items Work items array
- * @param {(item: any) => void} props.onSelectItem Callback when a work item is clicked
+ * @param {(item: any, cx?: any) => void} props.onSelectItem Callback when a work item is clicked
  * @param {boolean} [props.loading]
  */
 export function renderWIList({ items = [], onSelectItem, loading = false }) {
@@ -23,8 +23,9 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
       .bg(t.background)
       .border_1()
       .border_color(t.border)
+      .cursor_pointer()
       .hover((s) => s.border_color(t.accent || t.selected))
-      .on_click(() => onSelectItem(item))
+      .on_click((_e, cx) => onSelectItem(item, cx))
       .child(
         h_flex()
           .w_full()
@@ -58,13 +59,16 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
 
   return v_flex()
     .size_full()
+    .min_h(0)
     .p(10)
     .gap(8)
     .bg(t.chrome)
     .child(
       v_flex()
+        .id("wi-list-scroll")
         .flex_1()
         .w_full()
+        .min_h(0)
         .overflow_y_scrollbar()
         .gap(6)
         .when(loading, (el) =>

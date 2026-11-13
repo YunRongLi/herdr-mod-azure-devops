@@ -62,13 +62,13 @@ async function request(url, options = {}) {
  * @returns {Promise<{ id: string, displayName: string, email: string }>}
  */
 export async function getCurrentUser(config) {
-  const url = `${config.organization}/_apis/connectionData?api-version=7.1`;
+  const url = `${config.organization}/_apis/connectionData?api-version=7.1-preview`;
   const data = await request(url);
   const user = data.authenticatedUser || {};
   return {
     id: user.id || "",
-    displayName: user.providerDisplayName || user.customDisplayName || "User",
-    email: user.mailAddress || "",
+    displayName: user.customDisplayName || user.providerDisplayName || "User",
+    email: user.properties?.Account?.$value || user.mailAddress || user.providerDisplayName || "",
   };
 }
 
@@ -76,21 +76,32 @@ export async function getCurrentUser(config) {
  * Lists Pull Requests for the configured project.
  *
  * @param {import("./config.js").AdoConfig} config
- * @param {{ filter?: "mine" | "assigned" | "all", userId?: string }} [options]
+ * @param {{ filter?: "mine" | "assigned" | "all", userId?: string, user?: string, currentUser?: any }} [options]
  * @returns {Promise<Array<any>>}
  */
 export async function getPullRequests(config, options = {}) {
-  const { filter = "assigned", userId, user } = options;
+  const { filter = "assigned", userId, user, currentUser } = options;
   const targetUser = (user || config.user || "").trim();
   const project = encodeURIComponent(config.project);
-  let query = `searchCriteria.status=active&api-version=7.1&$top=100`;
+  let query = `searchCriteria.status=active&api-version=7.1&$top=500`;
 
-  // If no target username is configured, use server-side GUID query if available
-  if (!targetUser && userId) {
+  // Determine if targetUser matches the authenticated user
+  const authUser = currentUser || (userId ? { id: userId, displayName: "", email: "" } : null);
+  const term = targetUser.toLowerCase();
+  const isMatchCurrent =
+    !targetUser ||
+    (authUser &&
+      (authUser.id.toLowerCase() === term ||
+        (authUser.displayName && authUser.displayName.toLowerCase().includes(term)) ||
+        (authUser.email && authUser.email.toLowerCase().includes(term))));
+
+  const serverUserId = isMatchCurrent ? authUser?.id : null;
+
+  if (serverUserId) {
     if (filter === "mine") {
-      query += `&searchCriteria.creatorId=${encodeURIComponent(userId)}`;
+      query += `&searchCriteria.creatorId=${encodeURIComponent(serverUserId)}`;
     } else if (filter === "assigned") {
-      query += `&searchCriteria.reviewerId=${encodeURIComponent(userId)}`;
+      query += `&searchCriteria.reviewerId=${encodeURIComponent(serverUserId)}`;
     }
   }
 
@@ -217,8 +228,7 @@ export async function getAssignedWorkItems(config) {
   const wiqlQuery = {
     query: `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType]
             FROM WorkItems
-            WHERE [System.TeamProject] = @project
-              AND [System.AssignedTo] = @me
+            WHERE [System.AssignedTo] = @me
               AND [System.State] <> 'Closed'
               AND [System.State] <> 'Done'
               AND [System.State] <> 'Removed'

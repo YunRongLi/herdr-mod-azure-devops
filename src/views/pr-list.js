@@ -10,7 +10,7 @@ import { statusBadge } from "../components/status-badge.js";
  * @param {Array<any>} props.prs List of PRs
  * @param {"assigned" | "mine"} props.filter Active sub-filter
  * @param {(filter: "assigned" | "mine") => void} props.onFilterChange
- * @param {(pr: any) => void} props.onSelectPR Callback when a PR card is clicked
+ * @param {(pr: any, cx?: any) => void} props.onSelectPR Callback when a PR card is clicked
  * @param {boolean} [props.loading]
  */
 export function renderPRList({ prs = [], filter = "assigned", onFilterChange, onSelectPR, loading = false }) {
@@ -24,6 +24,7 @@ export function renderPRList({ prs = [], filter = "assigned", onFilterChange, on
       .items_center()
       .rounded(4)
       .text_size(11)
+      .cursor_pointer()
       .when(active, (el) => el.bg(t.selected))
       .text_color(active ? t.foreground : t.muted)
       .hover((s) => s.bg(active ? t.selected : t.hover))
@@ -40,8 +41,9 @@ export function renderPRList({ prs = [], filter = "assigned", onFilterChange, on
       .bg(t.background)
       .border_1()
       .border_color(t.border)
+      .cursor_pointer()
       .hover((s) => s.border_color(t.accent || t.selected))
-      .on_click(() => onSelectPR(pr))
+      .on_click((_e, cx) => onSelectPR(pr, cx))
       .child(
         h_flex()
           .w_full()
@@ -75,12 +77,14 @@ export function renderPRList({ prs = [], filter = "assigned", onFilterChange, on
 
   return v_flex()
     .size_full()
+    .min_h(0)
     .p(10)
     .gap(8)
     .bg(t.chrome)
     .child(
       h_flex()
         .w_full()
+        .flex_none()
         .items_center()
         .gap(4)
         .pb(4)
@@ -91,8 +95,10 @@ export function renderPRList({ prs = [], filter = "assigned", onFilterChange, on
     )
     .child(
       v_flex()
+        .id("pr-list-scroll")
         .flex_1()
         .w_full()
+        .min_h(0)
         .overflow_y_scrollbar()
         .gap(6)
         .when(loading, (el) =>

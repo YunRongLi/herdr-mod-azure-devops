@@ -130,6 +130,7 @@ export default class AzureDevOpsMod extends View {
             filter: this.prFilter,
             userId: this.user?.id,
             user: profile.user,
+            currentUser: this.user,
           });
           this.prs = prs;
 
@@ -300,11 +301,15 @@ export default class AzureDevOpsMod extends View {
           threads: this.prThreads,
           changes: this.prChanges,
           subTab: this.prSubTab,
-          onSubTabChange: (tab) => {
+          onSubTabChange: (tab, cx) => {
             this.prSubTab = tab;
+            const activeCx = cx || this.cx;
+            if (activeCx) activeCx.notify();
           },
-          onBack: () => {
+          onBack: (_e, cx) => {
             this.selectedPR = null;
+            const activeCx = cx || this.cx;
+            if (activeCx) activeCx.notify();
           },
           onSolvePR: (pr) => {
             const prompt = formatPRPrompt(pr);
@@ -326,8 +331,9 @@ export default class AzureDevOpsMod extends View {
             this.prFilter = f;
             this.refresh(this.cx || { notify: () => {} });
           },
-          onSelectPR: (pr) => {
-            this.cx?.spawn((cx) => this.loadPRDetails(pr, cx));
+          onSelectPR: (pr, cx) => {
+            const activeCx = cx || this.cx;
+            activeCx?.spawn((spawnCx) => this.loadPRDetails(pr, spawnCx));
           },
           loading: this.loading,
         });
@@ -337,8 +343,10 @@ export default class AzureDevOpsMod extends View {
         content = renderWIDetail({
           item: this.selectedWI,
           comments: this.wiComments,
-          onBack: () => {
+          onBack: (_e, cx) => {
             this.selectedWI = null;
+            const activeCx = cx || this.cx;
+            if (activeCx) activeCx.notify();
           },
           onSolveWithAgent: (item, comments) => {
             const prompt = formatWorkItemPrompt({ item, comments });
@@ -351,8 +359,9 @@ export default class AzureDevOpsMod extends View {
       } else {
         content = renderWIList({
           items: this.workItems,
-          onSelectItem: (item) => {
-            this.cx?.spawn((cx) => this.loadWIDetails(item, cx));
+          onSelectItem: (item, cx) => {
+            const activeCx = cx || this.cx;
+            activeCx?.spawn((spawnCx) => this.loadWIDetails(item, spawnCx));
           },
           loading: this.loading,
         });
@@ -361,9 +370,10 @@ export default class AzureDevOpsMod extends View {
 
     return v_flex()
       .size_full()
+      .min_h(0)
       .bg(t.chrome)
       .child(header)
       .when(Boolean(errorBanner), (el) => el.child(errorBanner))
-      .child(div().flex_1().w_full().child(content));
+      .child(v_flex().flex_1().w_full().min_h(0).child(content));
   }
 }
