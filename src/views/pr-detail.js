@@ -3,6 +3,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
 import { copyButton } from "../components/copy-button.js";
+import { selectableText } from "../components/selectable-text.js";
 import { renderPRThreads } from "./pr-threads.js";
 import { openExternalUrl } from "../utils.js";
 
@@ -220,15 +221,18 @@ export function renderPRDetail({
                 .justify_between()
                 .child(
                   h_flex()
+                    .flex_1()
                     .gap(6)
                     .items_center()
                     .child(statusBadge(pr.status, "pr"))
                     .child(
-                      div()
-                        .text_size(13)
-                        .font_medium()
-                        .text_color(t.foreground)
-                        .child(pr.title)
+                      selectableText({
+                        id: `pr-detail-title-${pr.id}`,
+                        text: pr.title || "",
+                        textSize: 13,
+                        textColor: t.foreground,
+                        flex1: true,
+                      })
                     )
                 )
                 .child(
@@ -278,10 +282,13 @@ export function renderPRDetail({
                       )
                   )
                   .child(
-                    div()
-                      .text_size(12)
-                      .text_color(t.muted)
-                      .child(pr.description)
+                    selectableText({
+                      id: `pr-detail-desc-${pr.id}`,
+                      text: pr.description || "",
+                      fallback: "(No description provided)",
+                      textSize: 12,
+                      textColor: t.foreground,
+                    })
                   )
               )
             )

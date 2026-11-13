@@ -3,6 +3,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
 import { copyButton } from "../components/copy-button.js";
+import { selectableText } from "../components/selectable-text.js";
 import { openExternalUrl, sanitizeText } from "../utils.js";
 
 /**
@@ -143,16 +144,19 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
                 .justify_between()
                 .child(
                   h_flex()
+                    .flex_1()
                     .gap(6)
                     .items_center()
                     .child(statusBadge(item.type, "wi"))
                     .child(statusBadge(item.state, "wi"))
                     .child(
-                      div()
-                        .text_size(13)
-                        .font_medium()
-                        .text_color(t.foreground)
-                        .child(`#${item.id} ${item.title}`)
+                      selectableText({
+                        id: `wi-detail-title-${item.id}`,
+                        text: `#${item.id} ${item.title}`,
+                        textSize: 13,
+                        textColor: t.foreground,
+                        flex1: true,
+                      })
                     )
                 )
                 .child(
@@ -208,10 +212,14 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
                 )
             )
             .child(
-              div()
-                .text_size(12)
-                .text_color(t.foreground)
-                .child(cleanDescription || "(No description provided)")
+              selectableText({
+                id: `wi-detail-desc-${item.id}`,
+                html: item.description,
+                text: cleanDescription,
+                fallback: "(No description provided)",
+                textSize: 12,
+                textColor: t.foreground,
+              })
             )
         )
         .child(
@@ -236,7 +244,7 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
             )
             .when(comments.length > 0, (el) =>
               el.children(
-                comments.map((comment) => {
+                comments.map((comment, commentIdx) => {
                   const cleanedText = stripHtml(comment.text);
                   return v_flex()
                     .w_full()
@@ -286,10 +294,14 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
                         )
                     )
                     .child(
-                      div()
-                        .text_size(12)
-                        .text_color(t.muted)
-                        .child(cleanedText || "(No comment text)")
+                      selectableText({
+                        id: `wi-detail-comment-${comment.id ?? commentIdx}`,
+                        html: comment.text,
+                        text: cleanedText,
+                        fallback: "(No comment text)",
+                        textSize: 12,
+                        textColor: t.foreground,
+                      })
                     );
                 })
               )

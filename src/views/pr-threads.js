@@ -3,6 +3,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
 import { copyButton } from "../components/copy-button.js";
+import { selectableText } from "../components/selectable-text.js";
 
 /**
  * Formats a comment timestamp nicely with date and time.
@@ -140,7 +141,7 @@ export function renderPRThreads({ threads = [], pr, onSolveThread }) {
           .w_full()
           .gap(6)
           .children(
-            sortedComments.map((comment) =>
+            sortedComments.map((comment, commentIdx) =>
               v_flex()
                 .w_full()
                 .p(6)
@@ -181,10 +182,13 @@ export function renderPRThreads({ threads = [], pr, onSolveThread }) {
                     )
                 )
                 .child(
-                  div()
-                    .text_size(12)
-                    .text_color(t.muted)
-                    .child(comment.content || "(No comment text)")
+                  selectableText({
+                    id: `pr-thread-${thread.id}-comment-${comment.id ?? commentIdx}`,
+                    text: comment.content || "",
+                    fallback: "(No comment text)",
+                    textSize: 12,
+                    textColor: t.foreground,
+                  })
                 )
             )
           )
