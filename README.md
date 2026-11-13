@@ -22,7 +22,7 @@ Monitor, inspect, and interact with Azure DevOps Pull Requests and Work Items di
 
 ## Quick Install (Automated)
 
-The installation scripts automatically link the mod, register the panel block in `layouts/main.json`, and insert the `DevOps` button into your top tab bar:
+The installation scripts automatically link the mod, configure a custom `devops` layout with the `DevOps` button in the top tab bar, and activate it immediately—without modifying any of Herdr's read-only shipped files:
 
 ### Linux / macOS
 ```bash

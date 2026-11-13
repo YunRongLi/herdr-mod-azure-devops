@@ -4,37 +4,68 @@ set -e
 HERDR_HOME="${HERDR_APP_HOME:-$HOME/.config/herdr-app}"
 MOD_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_MOD_DIR="$HERDR_HOME/mods/azure-devops"
-LAYOUT_FILE="$HERDR_HOME/layouts/main.json"
-TABS_FILE="$HERDR_HOME/mods/tabs/main.js"
+DEVOPS_TABS_DIR="$HERDR_HOME/mods/devops-tabs"
+DEVOPS_LAYOUT="$HERDR_HOME/layouts/devops.json"
+BASE_LAYOUT="$HERDR_HOME/layouts/main.json"
+BASE_TABS_DIR="$HERDR_HOME/mods/tabs"
+SHARED_FILE="$HERDR_HOME/shared.json"
 
 echo "Installing Herdr Azure DevOps mod..."
 echo "Herdr home: $HERDR_HOME"
 
 if [ ! -d "$HERDR_HOME" ]; then
-    echo "Error: Herdr directory not found at '$HERDR_HOME'. Please install or run herdr-app first."
+    echo "Error: Herdr directory not found at '$HERDR_HOME'. Please run herdr-app first."
     exit 1
 fi
 
-mkdir -p "$HERDR_HOME/mods"
+mkdir -p "$HERDR_HOME/mods" "$HERDR_HOME/layouts"
 
-# 1. Symlink or copy mod
+# Clean up any leftover rollback artifacts from past broken installs
+rm -f "$HERDR_HOME/layouts"/main-edited*.json 2>/dev/null || true
+rm -rf "$HERDR_HOME/mods"/tabs-edited* 2>/dev/null || true
+rm -rf "$HERDR_HOME/mods"/new-menu-edited* 2>/dev/null || true
+
+# 1. Symlink mod into Herdr mods directory
 if [ -L "$TARGET_MOD_DIR" ] || [ -d "$TARGET_MOD_DIR" ]; then
     rm -rf "$TARGET_MOD_DIR"
 fi
 ln -s "$MOD_SOURCE" "$TARGET_MOD_DIR"
 echo "Linked mod into: $TARGET_MOD_DIR"
 
-# 2. Register in layouts/main.json
-if [ -f "$LAYOUT_FILE" ]; then
-    if ! grep -q '"id": "azure-devops"' "$LAYOUT_FILE"; then
-        python3 -c '
+# 2. Create custom devops-tabs mod (preserves Herdr's pristine tabs mod)
+rm -rf "$DEVOPS_TABS_DIR"
+cp -r "$BASE_TABS_DIR" "$DEVOPS_TABS_DIR"
+python3 -c '
+import sys
+
+tabs_file = sys.argv[1]
+with open(tabs_file, "r", encoding="utf-8") as f:
+    content = f.read()
+
+target = ".when(enabled.includes(\"changes\"), el => el.child(panelButton(\"changes\", \"Changes\", \"mods/changes/changes.svg\")))"
+button = ".when(enabled.includes(\"changes\"), el => el.child(panelButton(\"changes\", \"Changes\", \"mods/changes/changes.svg\")))\n      .child(panelButton(\"azure-devops\", \"DevOps\", \"mods/azure-devops/assets/ado.svg\"))"
+
+if target in content and "azure-devops" not in content:
+    content = content.replace(target, button, 1)
+    with open(tabs_file, "w", encoding="utf-8") as f:
+        f.write(content)
+' "$DEVOPS_TABS_DIR/main.js"
+echo "Configured custom devops-tabs mod."
+
+# 3. Create custom devops layout (preserves Herdr's pristine main.json)
+python3 -c '
 import json, sys
-path = sys.argv[1]
-with open(path, "r", encoding="utf-8") as f:
+
+base_path = sys.argv[1]
+dest_path = sys.argv[2]
+
+with open(base_path, "r", encoding="utf-8") as f:
     data = json.load(f)
 
-def add_block(node):
+def update_layout(node):
     if isinstance(node, dict):
+        if node.get("id") == "tabs" and node.get("content", {}).get("mod") == "tabs":
+            node["content"]["mod"] = "devops-tabs"
         if node.get("id") == "panel-body" and "children" in node:
             existing = [c.get("id") for c in node["children"]]
             if "azure-devops" not in existing:
@@ -43,45 +74,52 @@ def add_block(node):
                     "type": "block",
                     "content": { "mod": "azure-devops" }
                 })
-                return True
-        for k, v in node.items():
-            if add_block(v):
-                return True
+        for v in node.values():
+            update_layout(v)
     elif isinstance(node, list):
         for item in node:
-            if add_block(item):
-                return True
-    return False
+            update_layout(item)
 
-if add_block(data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-    print("Registered panel in layouts/main.json")
-' "$LAYOUT_FILE" || true
-    fi
+update_layout(data)
+
+with open(dest_path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+' "$BASE_LAYOUT" "$DEVOPS_LAYOUT"
+echo "Configured custom layouts/devops.json."
+
+# 4. Update shared.json preferences
+if [ -f "$SHARED_FILE" ]; then
+    python3 -c '
+import json, sys
+
+shared_file = sys.argv[1]
+try:
+    with open(shared_file, "r", encoding="utf-8") as f:
+        shared = json.load(f)
+except Exception:
+    shared = {}
+
+panels = shared.get("workspace.panels", ["files", "changes"])
+if "azure-devops" not in panels:
+    panels.append("azure-devops")
+shared["workspace.panels"] = panels
+shared["layout"] = "devops"
+
+with open(shared_file, "w", encoding="utf-8") as f:
+    json.dump(shared, f)
+' "$SHARED_FILE"
 fi
 
-# 3. Add DevOps button to tabs/main.js
-if [ -f "$TABS_FILE" ]; then
-    if ! grep -q '"azure-devops"' "$TABS_FILE"; then
-        sed -i 's/\(\.when(enabled\.includes("changes")[^)]*)\)/\1\n      .child(panelButton("azure-devops", "DevOps", "mods\/azure-devops\/assets\/ado.svg"))/' "$TABS_FILE" || true
-        echo "Added DevOps button to mods/tabs/main.js"
-    fi
-fi
-
-# 4. Add Azure DevOps to new-menu
-NEW_MENU_FILE="$HERDR_HOME/mods/new-menu/main.js"
-if [ -f "$NEW_MENU_FILE" ]; then
-    if ! grep -q '"ado-tab"' "$NEW_MENU_FILE"; then
-        sed -i 's/\(this\.row("terminal"[^)]*)\)/\1\n      .child(this.row("ado-tab", svg("mods\/azure-devops\/assets\/ado.svg").size(14), "Azure DevOps", () => run("tab.new", { name: "Azure DevOps", space: space?.id, mod: "azure-devops" })))/' "$NEW_MENU_FILE" || true
-        echo "Added Azure DevOps to mods/new-menu/main.js"
-    fi
-fi
-
-# 5. Verify mod
+# 5. Validation and live switch
 if command -v herdr-app >/dev/null 2>&1; then
     herdr-app check "$TARGET_MOD_DIR"
-    echo "Mod validation check passed."
+    herdr-app check "$DEVOPS_TABS_DIR"
+    echo "Mod validation checks passed."
+
+    # If herdr-app is currently running, switch layout immediately
+    herdr-app do layout.switch '{"name":"devops"}' 2>/dev/null && echo "Active Herdr window switched to DevOps layout." || true
 fi
 
-echo "Installation complete. The DevOps button is now active in Herdr."
+echo ""
+echo "Installation complete!"
+echo "The 'DevOps' button is now configured in your top tab bar next to Files and Changes."
