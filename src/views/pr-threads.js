@@ -115,6 +115,7 @@ export function renderPRThreads({
   });
 
   const threadCard = (thread) => {
+    if (!thread || !thread.id) return null;
     const hasContext = Boolean(thread.filePath);
     const locationText = hasContext
       ? `${thread.filePath}${thread.lineNumber ? `:${thread.lineNumber}` : ""}`
@@ -145,7 +146,7 @@ export function renderPRThreads({
             h_flex()
               .gap(6)
               .items_center()
-              .child(statusBadge(thread.status, "thread"))
+              .child(statusBadge(thread.status, "thread", t))
               .child(
                 div()
                   .text_size(11)

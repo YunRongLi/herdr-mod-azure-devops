@@ -7,9 +7,10 @@ import { theme } from "herdr";
  *
  * @param {string} status Status text
  * @param {"pr" | "wi" | "thread"} [type] Context type
+ * @param {any} [themeOverride] Pre-fetched theme object to avoid host bridge calls
  */
-export function statusBadge(status, type = "pr") {
-  const t = theme();
+export function statusBadge(status, type = "pr", themeOverride = null) {
+  const t = themeOverride || theme() || {};
   const normalized = (status || "").toLowerCase().trim();
 
   let bg = t.chrome || "#252528";

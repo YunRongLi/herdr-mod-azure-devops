@@ -81,8 +81,9 @@ export function renderPRList({
       .child(label);
   };
 
-  const prCard = (pr) =>
-    v_flex()
+  const prCard = (pr) => {
+    if (!pr || !pr.id) return null;
+    return v_flex()
       .w_full()
       .p(10)
       .gap(6)
@@ -105,7 +106,7 @@ export function renderPRList({
               .flex_1()
               .min_w(0)
               .items_center()
-              .child(statusBadge(pr.status, "pr"))
+              .child(statusBadge(pr.status, "pr", t))
               .child(
                 div()
                   .text_size(11)
@@ -154,6 +155,11 @@ export function renderPRList({
           )
           .child(div().text_color(t.muted).child(pr.author || "Unknown author"))
       );
+  };
+
+  const MAX_VISIBLE = 50;
+  const visiblePRs = prs.slice(0, MAX_VISIBLE);
+  const remainingCount = prs.length - visiblePRs.length;
 
   return v_flex()
     .size_full()
@@ -259,7 +265,23 @@ export function renderPRList({
           )
         )
         .when(!loading && prs.length > 0, (el) =>
-          el.children(prs.map(prCard))
+          el
+            .children(visiblePRs.map(prCard).filter(Boolean))
+            .when(remainingCount > 0, (container) =>
+              container.child(
+                h_flex()
+                  .w_full()
+                  .py(8)
+                  .items_center()
+                  .justify_center()
+                  .child(
+                    div()
+                      .text_size(11)
+                      .text_color(t.dim)
+                      .child(`Showing 50 of ${prs.length} pull requests`)
+                  )
+              )
+            )
         )
     );
 }

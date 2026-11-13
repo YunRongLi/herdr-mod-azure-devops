@@ -54,8 +54,9 @@ export function renderWIList({
 }) {
   const t = theme();
 
-  const itemCard = (item) =>
-    v_flex()
+  const itemCard = (item) => {
+    if (!item || !item.id) return null;
+    return v_flex()
       .w_full()
       .p(10)
       .gap(6)
@@ -71,8 +72,8 @@ export function renderWIList({
           .w_full()
           .items_center()
           .gap(6)
-          .child(statusBadge(item.type, "wi"))
-          .child(statusBadge(item.state, "wi"))
+          .child(statusBadge(item.type, "wi", t))
+          .child(statusBadge(item.state, "wi", t))
           .child(
             div()
               .text_size(11)
@@ -111,6 +112,11 @@ export function renderWIList({
             )
           )
       );
+  };
+
+  const MAX_VISIBLE = 50;
+  const visibleItems = items.slice(0, MAX_VISIBLE);
+  const remainingCount = items.length - visibleItems.length;
 
   return v_flex()
     .size_full()
@@ -194,7 +200,23 @@ export function renderWIList({
           )
         )
         .when(!loading && items.length > 0, (el) =>
-          el.children(items.map(itemCard))
+          el
+            .children(visibleItems.map(itemCard).filter(Boolean))
+            .when(remainingCount > 0, (container) =>
+              container.child(
+                h_flex()
+                  .w_full()
+                  .py(8)
+                  .items_center()
+                  .justify_center()
+                  .child(
+                    div()
+                      .text_size(11)
+                      .text_color(t.dim)
+                      .child(`Showing 50 of ${items.length} work items`)
+                  )
+              )
+            )
         )
     );
 }

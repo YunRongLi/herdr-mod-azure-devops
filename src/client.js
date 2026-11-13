@@ -84,7 +84,7 @@ export async function getPullRequests(config, options = {}) {
   const targetUser = (user || config.user || "").trim();
   const project = encodeURIComponent(config.project);
   const statusParam = prStatus ? `searchCriteria.status=${encodeURIComponent(prStatus)}` : "searchCriteria.status=active";
-  let query = `${statusParam}&api-version=7.1&$top=500`;
+  let query = `${statusParam}&api-version=7.1&$top=100`;
 
   // Determine if targetUser matches the authenticated user
   const authUser = currentUser || (userId ? { id: userId, displayName: "", email: "" } : null);
