@@ -76,14 +76,15 @@ export async function getCurrentUser(config) {
  * Lists Pull Requests for the configured project.
  *
  * @param {import("./config.js").AdoConfig} config
- * @param {{ filter?: "mine" | "assigned" | "all", userId?: string, user?: string, currentUser?: any }} [options]
+ * @param {{ filter?: "mine" | "assigned" | "all", prStatus?: "active" | "completed" | "abandoned" | "all", userId?: string, user?: string, currentUser?: any }} [options]
  * @returns {Promise<Array<any>>}
  */
 export async function getPullRequests(config, options = {}) {
-  const { filter = "assigned", userId, user, currentUser } = options;
+  const { filter = "assigned", prStatus = "active", userId, user, currentUser } = options;
   const targetUser = (user || config.user || "").trim();
   const project = encodeURIComponent(config.project);
-  let query = `searchCriteria.status=active&api-version=7.1&$top=500`;
+  const statusParam = prStatus ? `searchCriteria.status=${encodeURIComponent(prStatus)}` : "searchCriteria.status=active";
+  let query = `${statusParam}&api-version=7.1&$top=500`;
 
   // Determine if targetUser matches the authenticated user
   const authUser = currentUser || (userId ? { id: userId, displayName: "", email: "" } : null);
@@ -234,19 +235,33 @@ export async function getPullRequestChanges(config, { repositoryId, pullRequestI
  * Lists active Work Items assigned to the current user.
  *
  * @param {import("./config.js").AdoConfig} config
+ * @param {{ status?: "active" | "resolved" | "closed" | "wontfix" | "all" }} [options]
  * @returns {Promise<Array<any>>}
  */
-export async function getAssignedWorkItems(config) {
+export async function getAssignedWorkItems(config, options = {}) {
+  const { status = "active" } = options;
   const project = encodeURIComponent(config.project);
   const wiqlUrl = `${config.organization}/${project}/_apis/wit/wiql?api-version=7.1`;
+
+  let stateFilter = "";
+  if (status === "all") {
+    stateFilter = "";
+  } else if (status === "resolved") {
+    stateFilter = "AND [System.State] = 'Resolved'";
+  } else if (status === "closed") {
+    stateFilter = "AND ([System.State] = 'Closed' OR [System.State] = 'Done')";
+  } else if (status === "wontfix") {
+    stateFilter = "AND ([System.State] = 'Removed' OR [System.State] = 'Won\\'t Fix')";
+  } else {
+    // "active" (default)
+    stateFilter = "AND [System.State] <> 'Closed' AND [System.State] <> 'Done' AND [System.State] <> 'Removed'";
+  }
 
   const wiqlQuery = {
     query: `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType]
             FROM WorkItems
             WHERE [System.AssignedTo] = @me
-              AND [System.State] <> 'Closed'
-              AND [System.State] <> 'Done'
-              AND [System.State] <> 'Removed'
+              ${stateFilter}
             ORDER BY [System.ChangedDate] DESC`,
   };
 

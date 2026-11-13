@@ -2,6 +2,7 @@ import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
+import { statusFilter } from "../components/status-filter.js";
 
 /**
  * Renders a skeleton placeholder card for work items.
@@ -35,14 +36,22 @@ function renderSkeletonWICard(t) {
 }
 
 /**
- * List view of active Work Items assigned to current user.
+ * List view of Work Items assigned to current user with status filter.
  *
  * @param {Object} props
  * @param {Array<any>} props.items Work items array
+ * @param {"active" | "resolved" | "closed" | "wontfix" | "all"} [props.status]
+ * @param {(status: string) => void} [props.onStatusChange]
  * @param {(item: any, cx?: any) => void} props.onSelectItem Callback when a work item is clicked
  * @param {boolean} [props.loading]
  */
-export function renderWIList({ items = [], onSelectItem, loading = false }) {
+export function renderWIList({
+  items = [],
+  status = "active",
+  onStatusChange = () => {},
+  onSelectItem,
+  loading = false,
+}) {
   const t = theme();
 
   const itemCard = (item) =>
@@ -126,10 +135,19 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
             .child("Assigned to Me")
         )
         .child(
-          div()
-            .text_size(11)
-            .text_color(t.dim)
-            .child(!loading ? `${items.length} work item${items.length === 1 ? "" : "s"}` : "")
+          statusFilter({
+            options: [
+              { id: "active", label: "Active" },
+              { id: "resolved", label: "Resolved" },
+              { id: "closed", label: "Closed" },
+              { id: "wontfix", label: "Won't Fix" },
+              { id: "all", label: "All" },
+            ],
+            activeId: status,
+            onChange: onStatusChange,
+            height: 22,
+            textSize: 10.5,
+          })
         )
     )
     .child(
@@ -161,7 +179,11 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
                   .text_size(13)
                   .font_medium()
                   .text_color(t.foreground)
-                  .child("No active work items assigned")
+                  .child(
+                    status === "all"
+                      ? "No work items assigned"
+                      : `No ${status} work items assigned`
+                  )
               )
               .child(
                 div()

@@ -2,6 +2,7 @@ import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
+import { statusFilter } from "../components/status-filter.js";
 
 /**
  * Renders a skeleton placeholder card during data loading.
@@ -40,19 +41,23 @@ function renderSkeletonCard(t) {
 }
 
 /**
- * List view of Pull Requests with sub-filter toggle.
+ * List view of Pull Requests with sub-filter toggle and status filter.
  *
  * @param {Object} props
  * @param {Array<any>} props.prs List of PRs
  * @param {"assigned" | "mine"} props.filter Active sub-filter
+ * @param {"active" | "completed" | "abandoned" | "all"} [props.status] Status filter
  * @param {(filter: "assigned" | "mine") => void} props.onFilterChange
+ * @param {(status: "active" | "completed" | "abandoned" | "all") => void} props.onStatusChange
  * @param {(pr: any, cx?: any) => void} props.onSelectPR Callback when a PR card is clicked
  * @param {boolean} [props.loading]
  */
 export function renderPRList({
   prs = [],
   filter = "assigned",
+  status = "active",
   onFilterChange,
+  onStatusChange = () => {},
   onSelectPR,
   loading = false,
   onRefresh = () => {},
@@ -173,10 +178,18 @@ export function renderPRList({
             .child(filterTab("mine", "Created by Me"))
         )
         .child(
-          div()
-            .text_size(11)
-            .text_color(t.dim)
-            .child(!loading ? `${prs.length} pull request${prs.length === 1 ? "" : "s"}` : "")
+          statusFilter({
+            options: [
+              { id: "active", label: "Active" },
+              { id: "completed", label: "Completed" },
+              { id: "abandoned", label: "Abandoned" },
+              { id: "all", label: "All" },
+            ],
+            activeId: status,
+            onChange: onStatusChange,
+            height: 22,
+            textSize: 10.5,
+          })
         )
     )
     .child(
@@ -209,9 +222,11 @@ export function renderPRList({
                   .font_medium()
                   .text_color(t.foreground)
                   .child(
-                    filter === "assigned"
-                      ? "No pull requests assigned to you"
-                      : "No pull requests created by you"
+                    status === "all"
+                      ? (filter === "assigned"
+                          ? "No pull requests assigned to you"
+                          : "No pull requests created by you")
+                      : `No ${status} pull requests ${filter === "assigned" ? "assigned to you" : "created by you"}`
                   )
               )
               .child(

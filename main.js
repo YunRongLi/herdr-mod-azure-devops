@@ -51,13 +51,16 @@ export default class AzureDevOpsMod extends View {
 
     this.user = null;
     this.prFilter = "mine";
+    this.prStatusFilter = "active";
     this.prs = [];
     this.selectedPR = null;
     this.agentPicker = null;
     this.prThreads = [];
     this.prChanges = [];
     this.prSubTab = "threads";
+    this.prThreadStatusFilter = "all";
 
+    this.wiStatusFilter = "active";
     this.workItems = [];
     this.selectedWI = null;
     this.wiComments = [];
@@ -139,6 +142,7 @@ export default class AzureDevOpsMod extends View {
         if (this.mode === "prs") {
           const prs = await getPullRequests(profile, {
             filter: this.prFilter,
+            prStatus: this.prStatusFilter,
             userId: this.user?.id,
             user: profile.user,
             currentUser: this.user,
@@ -150,7 +154,9 @@ export default class AzureDevOpsMod extends View {
             await this.loadPRDetails(updated, spawnCx);
           }
         } else {
-          const items = await getAssignedWorkItems(profile);
+          const items = await getAssignedWorkItems(profile, {
+            status: this.wiStatusFilter,
+          });
           this.workItems = items;
 
           if (this.selectedWI) {
@@ -385,6 +391,11 @@ export default class AzureDevOpsMod extends View {
           threads: this.prThreads,
           changes: this.prChanges,
           subTab: this.prSubTab,
+          threadStatus: this.prThreadStatusFilter,
+          onThreadStatusChange: (status) => {
+            this.prThreadStatusFilter = status;
+            this.cx?.notify();
+          },
           onSubTabChange: (tab, cx) => {
             this.prSubTab = tab;
             const activeCx = cx || this.cx;
@@ -409,8 +420,13 @@ export default class AzureDevOpsMod extends View {
         content = renderPRList({
           prs: this.prs,
           filter: this.prFilter,
+          status: this.prStatusFilter,
           onFilterChange: (f) => {
             this.prFilter = f;
+            this.refresh(this.cx || { notify: () => {} });
+          },
+          onStatusChange: (s) => {
+            this.prStatusFilter = s;
             this.refresh(this.cx || { notify: () => {} });
           },
           onSelectPR: (pr, cx) => {
@@ -441,6 +457,11 @@ export default class AzureDevOpsMod extends View {
       } else {
         content = renderWIList({
           items: this.workItems,
+          status: this.wiStatusFilter,
+          onStatusChange: (s) => {
+            this.wiStatusFilter = s;
+            this.refresh(this.cx || { notify: () => {} });
+          },
           onSelectItem: (item, cx) => {
             const activeCx = cx || this.cx;
             activeCx?.spawn((spawnCx) => this.loadWIDetails(item, spawnCx));

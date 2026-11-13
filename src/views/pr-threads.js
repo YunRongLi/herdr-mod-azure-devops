@@ -4,6 +4,21 @@ import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
 import { copyButton } from "../components/copy-button.js";
 import { selectableText } from "../components/selectable-text.js";
+import { statusFilter } from "../components/status-filter.js";
+
+/**
+ * Normalizes Azure DevOps thread status to standard filter token.
+ * @param {string} raw
+ * @returns {"active" | "pending" | "resolved" | "wontfix" | "closed"}
+ */
+function normalizeThreadStatus(raw) {
+  const s = (raw || "active").toLowerCase().replace(/[^a-z]/g, "");
+  if (s === "fixed" || s === "resolved") return "resolved";
+  if (s === "wontfix" || s === "bydesign") return "wontfix";
+  if (s === "closed") return "closed";
+  if (s === "pending") return "pending";
+  return "active";
+}
 
 /**
  * Formats a comment timestamp nicely with date and time.
@@ -35,15 +50,22 @@ function formatThreadCopyText(thread, locationText, comments) {
 }
 
 /**
- * Renders the review comments and discussion threads for a PR.
- * Displays newest comments first and oldest comments at the end.
+ * Renders the review comments and discussion threads for a PR with status filtering.
  *
  * @param {Object} props
  * @param {Array<any>} props.threads
  * @param {any} props.pr
  * @param {(thread: any, pr: any) => void} props.onSolveThread
+ * @param {string} [props.threadStatus="all"]
+ * @param {(status: string) => void} [props.onThreadStatusChange]
  */
-export function renderPRThreads({ threads = [], pr, onSolveThread }) {
+export function renderPRThreads({
+  threads = [],
+  pr,
+  onSolveThread,
+  threadStatus = "all",
+  onThreadStatusChange = () => {},
+}) {
   const t = theme();
 
   if (!threads || threads.length === 0) {
@@ -54,8 +76,39 @@ export function renderPRThreads({ threads = [], pr, onSolveThread }) {
       .child("No comment threads found on this Pull Request.");
   }
 
+  // Calculate counts per status
+  const statusCounts = {
+    all: threads.length,
+    active: 0,
+    pending: 0,
+    resolved: 0,
+    wontfix: 0,
+    closed: 0,
+  };
+
+  threads.forEach((th) => {
+    const key = normalizeThreadStatus(th.status);
+    if (typeof statusCounts[key] === "number") {
+      statusCounts[key]++;
+    }
+  });
+
+  const filterOptions = [
+    { id: "all", label: "All", count: statusCounts.all },
+    { id: "active", label: "Active", count: statusCounts.active },
+    { id: "pending", label: "Pending", count: statusCounts.pending },
+    { id: "resolved", label: "Resolved", count: statusCounts.resolved },
+    { id: "wontfix", label: "Won't Fix", count: statusCounts.wontfix },
+    { id: "closed", label: "Closed", count: statusCounts.closed },
+  ];
+
+  // Filter threads by active status selection
+  const filteredThreads = threadStatus === "all"
+    ? threads
+    : threads.filter((th) => normalizeThreadStatus(th.status) === threadStatus);
+
   // Ensure threads are sorted with newest activity first
-  const sortedThreads = [...threads].sort((a, b) => {
+  const sortedThreads = [...filteredThreads].sort((a, b) => {
     const timeA = a.latestActivityTime ?? new Date(a.comments?.[0]?.publishedDate || a.publishedDate || 0).getTime();
     const timeB = b.latestActivityTime ?? new Date(b.comments?.[0]?.publishedDate || b.publishedDate || 0).getTime();
     return timeB - timeA || (b.id || 0) - (a.id || 0);
@@ -197,5 +250,35 @@ export function renderPRThreads({ threads = [], pr, onSolveThread }) {
 
   return v_flex()
     .w_full()
-    .children(sortedThreads.map(threadCard));
+    .gap(8)
+    .child(
+      h_flex()
+        .w_full()
+        .items_center()
+        .justify_between()
+        .pb(6)
+        .border_b(1)
+        .border_color(t.border)
+        .child(
+          statusFilter({
+            options: filterOptions,
+            activeId: threadStatus,
+            onChange: onThreadStatusChange,
+            height: 22,
+            textSize: 10,
+          })
+        )
+    )
+    .when(sortedThreads.length === 0, (el) =>
+      el.child(
+        div()
+          .p(16)
+          .text_size(12)
+          .text_color(t.dim)
+          .child(`No threads matching '${threadStatus}' status.`)
+      )
+    )
+    .when(sortedThreads.length > 0, (el) =>
+      el.children(sortedThreads.map(threadCard))
+    );
 }
