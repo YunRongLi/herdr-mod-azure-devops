@@ -25,6 +25,7 @@ import {
   launchNewAgent,
 } from "./src/agent.js";
 import { renderHeader } from "./src/components/header.js";
+import { renderSidebarButton } from "./src/views/sidebar-button.js";
 import { SettingsView } from "./src/views/settings.js";
 import { renderPRList } from "./src/views/pr-list.js";
 import { renderPRDetail } from "./src/views/pr-detail.js";
@@ -35,9 +36,14 @@ import { renderWIDetail } from "./src/views/wi-detail.js";
 export default class AzureDevOpsMod extends View {
   init(_props, cx) {
     this.cx = cx;
-    const p = props() ?? {};
+    const p = _props || props() || {};
+    this.isSidebarButton = p.role === "sidebar-button";
     this.isDialog = p.role === "settings";
     this.dialogOverlayId = p.overlay;
+
+    if (this.isSidebarButton) {
+      return;
+    }
 
     this.mode = "prs"; // "prs" | "workitems"
     this.showingSettings = !isConfigured();
@@ -272,6 +278,10 @@ export default class AzureDevOpsMod extends View {
     const config = loadConfig();
 
     const p = props() || {};
+    if (this.isSidebarButton || p.role === "sidebar-button") {
+      return renderSidebarButton();
+    }
+
     const isOverlayDialog = Boolean(this.isDialog || p.role === "settings" || p.overlay);
 
     if (this.showingSettings || isOverlayDialog) {

@@ -1,7 +1,38 @@
-import { div } from "gpui-kit";
+import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
+
+/**
+ * Renders a skeleton placeholder card for work items.
+ */
+function renderSkeletonWICard(t) {
+  return v_flex()
+    .w_full()
+    .p(10)
+    .gap(6)
+    .rounded(6)
+    .bg(t.background)
+    .border_1()
+    .border_color(t.border)
+    .child(
+      h_flex()
+        .w_full()
+        .items_center()
+        .gap(6)
+        .child(div().w(40).h(16).rounded(4).bg(t.hover))
+        .child(div().w(48).h(16).rounded(4).bg(t.hover))
+        .child(div().w(180).h(14).rounded(4).bg(t.hover))
+    )
+    .child(
+      h_flex()
+        .w_full()
+        .items_center()
+        .justify_between()
+        .child(div().w(100).h(12).rounded(3).bg(t.hover))
+        .child(div().w(50).h(12).rounded(3).bg(t.hover))
+    );
+}
 
 /**
  * List view of active Work Items assigned to current user.
@@ -18,13 +49,13 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
     v_flex()
       .w_full()
       .p(10)
-      .gap(4)
+      .gap(6)
       .rounded(6)
       .bg(t.background)
       .border_1()
       .border_color(t.border)
       .cursor_pointer()
-      .hover((s) => s.border_color(t.accent || t.selected))
+      .hover((s) => s.border_color(t.accent || t.selected || t.border || "#5b8def"))
       .on_click((_e, cx) => onSelectItem(item, cx))
       .child(
         h_flex()
@@ -35,9 +66,19 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
           .child(statusBadge(item.state, "wi"))
           .child(
             div()
-              .text_size(12)
+              .text_size(11)
+              .font_medium()
+              .text_color(t.dim)
+              .child(`#${item.id}`)
+          )
+          .child(
+            div()
+              .flex_1()
+              .truncate()
+              .text_size(12.5)
+              .font_medium()
               .text_color(t.foreground)
-              .child(`#${item.id} ${item.title}`)
+              .child(item.title || "Untitled Work Item")
           )
       )
       .child(
@@ -45,9 +86,14 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
           .w_full()
           .items_center()
           .justify_between()
-          .text_size(10)
+          .text_size(10.5)
           .text_color(t.dim)
-          .child(div().child(item.areaPath || item.iterationPath || "General"))
+          .child(
+            h_flex()
+              .gap(4)
+              .items_center()
+              .child(div().text_color(t.muted).child(item.areaPath || item.iterationPath || "General"))
+          )
           .child(
             div().child(
               item.changedDate
@@ -64,6 +110,29 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
     .gap(8)
     .bg(t.chrome)
     .child(
+      h_flex()
+        .w_full()
+        .flex_none()
+        .items_center()
+        .justify_between()
+        .pb(4)
+        .border_b(1)
+        .border_color(t.border)
+        .child(
+          div()
+            .text_size(11.5)
+            .font_medium()
+            .text_color(t.foreground)
+            .child("Assigned to Me")
+        )
+        .child(
+          div()
+            .text_size(11)
+            .text_color(t.dim)
+            .child(!loading ? `${items.length} work item${items.length === 1 ? "" : "s"}` : "")
+        )
+    )
+    .child(
       v_flex()
         .id("wi-list-scroll")
         .flex_1()
@@ -72,21 +141,34 @@ export function renderWIList({ items = [], onSelectItem, loading = false }) {
         .overflow_y_scrollbar()
         .gap(6)
         .when(loading, (el) =>
-          el.child(
-            div()
-              .p(16)
-              .text_size(12)
-              .text_color(t.dim)
-              .child("Loading Work Items...")
-          )
+          el.children([
+            renderSkeletonWICard(t),
+            renderSkeletonWICard(t),
+            renderSkeletonWICard(t),
+          ])
         )
         .when(!loading && items.length === 0, (el) =>
           el.child(
-            div()
-              .p(16)
-              .text_size(12)
-              .text_color(t.dim)
-              .child("No active Work Items assigned to you.")
+            v_flex()
+              .size_full()
+              .items_center()
+              .justify_center()
+              .p(24)
+              .gap(8)
+              .child(svg("mods/azure-devops/assets/wi.svg").size(28).text_color(t.dim))
+              .child(
+                div()
+                  .text_size(13)
+                  .font_medium()
+                  .text_color(t.foreground)
+                  .child("No active work items assigned")
+              )
+              .child(
+                div()
+                  .text_size(11)
+                  .text_color(t.dim)
+                  .child("Tasks, bugs, or stories assigned to you will show up here.")
+              )
           )
         )
         .when(!loading && items.length > 0, (el) =>
