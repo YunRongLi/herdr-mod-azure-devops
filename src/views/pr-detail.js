@@ -2,6 +2,7 @@ import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
+import { copyButton } from "../components/copy-button.js";
 import { renderPRThreads } from "./pr-threads.js";
 import { openExternalUrl } from "../utils.js";
 
@@ -143,6 +144,16 @@ export function renderPRDetail({
             .gap(6)
             .items_center()
             .child(
+              copyButton({
+                text: `#${pr.id} ${pr.title}`,
+                label: "Copy Summary",
+                tooltip: "Copy PR ID and title",
+                notifyTitle: "Summary Copied",
+                height: 24,
+                textSize: 11,
+              })
+            )
+            .child(
               h_flex()
                 .h(24)
                 .px(8)
@@ -204,14 +215,31 @@ export function renderPRDetail({
             .gap(4)
             .child(
               h_flex()
-                .gap(6)
+                .w_full()
                 .items_center()
-                .child(statusBadge(pr.status, "pr"))
+                .justify_between()
                 .child(
-                  div()
-                    .text_size(13)
-                    .text_color(t.foreground)
-                    .child(pr.title)
+                  h_flex()
+                    .gap(6)
+                    .items_center()
+                    .child(statusBadge(pr.status, "pr"))
+                    .child(
+                      div()
+                        .text_size(13)
+                        .font_medium()
+                        .text_color(t.foreground)
+                        .child(pr.title)
+                    )
+                )
+                .child(
+                  copyButton({
+                    text: `#${pr.id} ${pr.title}`,
+                    label: "Copy",
+                    tooltip: "Copy PR ID and title",
+                    notifyTitle: "Summary Copied",
+                    height: 18,
+                    textSize: 9.5,
+                  })
                 )
             )
             .child(
@@ -222,11 +250,39 @@ export function renderPRDetail({
             )
             .when(Boolean(pr.description), (el) =>
               el.child(
-                div()
-                  .mt(4)
-                  .text_size(12)
-                  .text_color(t.muted)
-                  .child(pr.description)
+                v_flex()
+                  .w_full()
+                  .mt(6)
+                  .gap(4)
+                  .child(
+                    h_flex()
+                      .w_full()
+                      .items_center()
+                      .justify_between()
+                      .child(
+                        div()
+                          .text_size(11)
+                          .font_medium()
+                          .text_color(t.dim)
+                          .child("Description")
+                      )
+                      .child(
+                        copyButton({
+                          text: pr.description || "",
+                          label: "Copy Description",
+                          tooltip: "Copy PR description to clipboard",
+                          notifyTitle: "Description Copied",
+                          height: 18,
+                          textSize: 9.5,
+                        })
+                      )
+                  )
+                  .child(
+                    div()
+                      .text_size(12)
+                      .text_color(t.muted)
+                      .child(pr.description)
+                  )
               )
             )
         )

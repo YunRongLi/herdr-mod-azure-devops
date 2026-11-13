@@ -1,7 +1,8 @@
-import { div, svg } from "gpui-kit";
+import { div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
+import { copyButton } from "../components/copy-button.js";
 
 /**
  * Formats a comment timestamp nicely with date and time.
@@ -19,6 +20,17 @@ function formatCommentDate(dateStr) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * Formats entire thread into plain text for clipboard export.
+ */
+function formatThreadCopyText(thread, locationText, comments) {
+  const header = `[PR Thread: ${locationText} (${thread.status || "Active"})]`;
+  const body = comments
+    .map((c) => `${c.author || "Unknown"} (${formatCommentDate(c.publishedDate)}):\n${c.content || ""}`)
+    .join("\n\n");
+  return `${header}\n\n${body}`;
 }
 
 /**
@@ -89,23 +101,38 @@ export function renderPRThreads({ threads = [], pr, onSolveThread }) {
           )
           .child(
             h_flex()
-              .h(22)
-              .px(6)
               .gap(4)
               .items_center()
-              .rounded(4)
-              .bg(t.chrome)
-              .border_1()
-              .border_color(t.border)
-              .cursor_pointer()
-              .hover((s) => s.bg(t.hover).text_color(t.accent || t.foreground))
-              .text_size(10)
-              .text_color(t.muted)
-              .on_click((_e, cx) => {
-                cx.stop_propagation();
-                onSolveThread(thread, pr);
-              })
-              .child("Solve with Agent")
+              .child(
+                copyButton({
+                  text: formatThreadCopyText(thread, locationText, sortedComments),
+                  label: "Copy Thread",
+                  tooltip: "Copy entire thread to clipboard",
+                  notifyTitle: "Thread Copied",
+                  height: 22,
+                  textSize: 10,
+                })
+              )
+              .child(
+                h_flex()
+                  .h(22)
+                  .px(6)
+                  .gap(4)
+                  .items_center()
+                  .rounded(4)
+                  .bg(t.chrome)
+                  .border_1()
+                  .border_color(t.border)
+                  .cursor_pointer()
+                  .hover((s) => s.bg(t.hover).text_color(t.accent || t.foreground))
+                  .text_size(10)
+                  .text_color(t.muted)
+                  .on_click((_e, cx) => {
+                    cx.stop_propagation();
+                    onSolveThread(thread, pr);
+                  })
+                  .child("Solve with Agent")
+              )
           )
       )
       .child(
@@ -132,10 +159,25 @@ export function renderPRThreads({ threads = [], pr, onSolveThread }) {
                         .child(comment.author)
                     )
                     .child(
-                      div()
-                        .text_size(10)
-                        .text_color(t.dim)
-                        .child(formatCommentDate(comment.publishedDate))
+                      h_flex()
+                        .gap(6)
+                        .items_center()
+                        .child(
+                          div()
+                            .text_size(10)
+                            .text_color(t.dim)
+                            .child(formatCommentDate(comment.publishedDate))
+                        )
+                        .child(
+                          copyButton({
+                            text: comment.content || "",
+                            label: "Copy",
+                            tooltip: "Copy comment to clipboard",
+                            notifyTitle: "Comment Copied",
+                            height: 18,
+                            textSize: 9.5,
+                          })
+                        )
                     )
                 )
                 .child(
@@ -149,5 +191,7 @@ export function renderPRThreads({ threads = [], pr, onSolveThread }) {
       );
   };
 
-  return v_flex().w_full().gap(4).children(sortedThreads.map(threadCard));
+  return v_flex()
+    .w_full()
+    .children(sortedThreads.map(threadCard));
 }

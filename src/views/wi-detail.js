@@ -2,6 +2,7 @@ import { div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
+import { copyButton } from "../components/copy-button.js";
 import { openExternalUrl, sanitizeText } from "../utils.js";
 
 /**
@@ -77,6 +78,16 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
             .gap(6)
             .items_center()
             .child(
+              copyButton({
+                text: `#${item.id} ${item.title}`,
+                label: "Copy Summary",
+                tooltip: "Copy Work Item ID and title",
+                notifyTitle: "Summary Copied",
+                height: 24,
+                textSize: 11,
+              })
+            )
+            .child(
               h_flex()
                 .h(24)
                 .px(8)
@@ -127,15 +138,32 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
             .gap(4)
             .child(
               h_flex()
-                .gap(6)
+                .w_full()
                 .items_center()
-                .child(statusBadge(item.type, "wi"))
-                .child(statusBadge(item.state, "wi"))
+                .justify_between()
                 .child(
-                  div()
-                    .text_size(13)
-                    .text_color(t.foreground)
-                    .child(`#${item.id} ${item.title}`)
+                  h_flex()
+                    .gap(6)
+                    .items_center()
+                    .child(statusBadge(item.type, "wi"))
+                    .child(statusBadge(item.state, "wi"))
+                    .child(
+                      div()
+                        .text_size(13)
+                        .font_medium()
+                        .text_color(t.foreground)
+                        .child(`#${item.id} ${item.title}`)
+                    )
+                )
+                .child(
+                  copyButton({
+                    text: `#${item.id} ${item.title}`,
+                    label: "Copy",
+                    tooltip: "Copy ID and title",
+                    notifyTitle: "Copied",
+                    height: 18,
+                    textSize: 9.5,
+                  })
                 )
             )
             .child(
@@ -155,10 +183,29 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
             .border_color(t.border)
             .gap(4)
             .child(
-              div()
-                .text_size(11)
-                .text_color(t.dim)
-                .child("Description")
+              h_flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .child(
+                  div()
+                    .text_size(11)
+                    .font_medium()
+                    .text_color(t.dim)
+                    .child("Description")
+                )
+                .when(Boolean(cleanDescription), (el) =>
+                  el.child(
+                    copyButton({
+                      text: cleanDescription,
+                      label: "Copy Description",
+                      tooltip: "Copy description text",
+                      notifyTitle: "Description Copied",
+                      height: 18,
+                      textSize: 9.5,
+                    })
+                  )
+                )
             )
             .child(
               div()
@@ -174,6 +221,7 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
             .child(
               div()
                 .text_size(11)
+                .font_medium()
                 .text_color(t.dim)
                 .child(`Discussion (${comments.length})`)
             )
@@ -188,8 +236,9 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
             )
             .when(comments.length > 0, (el) =>
               el.children(
-                comments.map((comment) =>
-                  v_flex()
+                comments.map((comment) => {
+                  const cleanedText = stripHtml(comment.text);
+                  return v_flex()
                     .w_full()
                     .p(8)
                     .rounded(6)
@@ -209,13 +258,30 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
                             .child(comment.author)
                         )
                         .child(
-                          div()
-                            .text_size(10)
-                            .text_color(t.dim)
+                          h_flex()
+                            .gap(6)
+                            .items_center()
                             .child(
-                              comment.createdDate
-                                ? new Date(comment.createdDate).toLocaleDateString()
-                                : ""
+                              div()
+                                .text_size(10)
+                                .text_color(t.dim)
+                                .child(
+                                  comment.createdDate
+                                    ? new Date(comment.createdDate).toLocaleDateString()
+                                    : ""
+                                )
+                            )
+                            .when(Boolean(cleanedText), (el) =>
+                              el.child(
+                                copyButton({
+                                  text: cleanedText,
+                                  label: "Copy",
+                                  tooltip: "Copy comment text",
+                                  notifyTitle: "Comment Copied",
+                                  height: 18,
+                                  textSize: 9.5,
+                                })
+                              )
                             )
                         )
                     )
@@ -223,9 +289,9 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
                       div()
                         .text_size(12)
                         .text_color(t.muted)
-                        .child(stripHtml(comment.text))
-                    )
-                )
+                        .child(cleanedText || "(No comment text)")
+                    );
+                })
               )
             )
         )
