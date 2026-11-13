@@ -1,5 +1,5 @@
 import { View, div } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
+import { v_flex, h_flex, InputState } from "gpui-base";
 import { theme, run, props, openOverlay, closeOverlay, focused, notify } from "herdr";
 import {
   loadConfig,
@@ -12,8 +12,10 @@ import {
   getPullRequests,
   getPullRequestThreads,
   getPullRequestChanges,
+  postPullRequestThreadComment,
   getAssignedWorkItems,
   getWorkItemDetail,
+  postWorkItemComment,
 } from "./src/client.js";
 import {
   formatPRThreadPrompt,
@@ -65,6 +67,17 @@ export default class AzureDevOpsMod extends View {
     this.workItems = [];
     this.selectedWI = null;
     this.wiComments = [];
+
+    this.threadInputs = new Map();
+    this.submittingThreadId = null;
+
+    this.wiCommentInput = InputState.new({ placeholder: "Write a discussion comment..." });
+    this.wiCommentInput.on("submit", (_e, submitCx) => {
+      if (this.selectedWI) {
+        this.submitWIComment(this.selectedWI.id, submitCx);
+      }
+    });
+    this.submittingWIComment = false;
 
     this.loading = false;
     this.error = null;
@@ -193,11 +206,102 @@ export default class AzureDevOpsMod extends View {
       this.selectedPR = pr;
       this.prThreads = threads;
       this.prChanges = changes;
+
+      // Pre-allocate thread reply inputs outside render
+      for (const th of threads) {
+        if (!this.threadInputs.has(th.id)) {
+          const inp = InputState.new({ placeholder: "Reply to this thread..." });
+          inp.on("submit", (_e, submitCx) => this.submitPRReply(th.id, submitCx));
+          this.threadInputs.set(th.id, inp);
+        }
+      }
     } catch (err) {
       this.error = `Failed to load PR details: ${err.message || String(err)}`;
     } finally {
       cx.notify();
     }
+  }
+
+  submitPRReply(threadId, cx) {
+    if (this.submittingThreadId || !this.selectedPR) return;
+    const inputState = this.threadInputs.get(threadId);
+    if (!inputState) return;
+    const content = inputState.value().trim();
+    if (!content) return;
+
+    const profile = getActiveProfile();
+    if (!profile) return;
+
+    this.submittingThreadId = threadId;
+    this.error = null;
+    const activeCx = cx || this.cx;
+    activeCx?.notify();
+
+    activeCx?.spawn(async (spawnCx) => {
+      try {
+        await postPullRequestThreadComment(profile, {
+          repositoryId: this.selectedPR.repositoryId,
+          pullRequestId: this.selectedPR.id,
+          threadId,
+          content,
+        });
+        inputState.set_value("");
+        try {
+          notify({
+            title: "Reply Posted",
+            body: content.length > 50 ? `${content.slice(0, 47)}...` : content,
+            level: "info",
+          });
+        } catch {
+          // Toast is non-critical feedback
+        }
+        await this.loadPRDetails(this.selectedPR, spawnCx);
+      } catch (err) {
+        this.error = `Failed to post reply: ${err.message || String(err)}`;
+      } finally {
+        this.submittingThreadId = null;
+        spawnCx.notify();
+      }
+    });
+  }
+
+  submitWIComment(workItemId, cx) {
+    if (this.submittingWIComment || !this.selectedWI) return;
+    const content = this.wiCommentInput.value().trim();
+    if (!content) return;
+
+    const profile = getActiveProfile();
+    if (!profile) return;
+
+    this.submittingWIComment = true;
+    this.error = null;
+    const activeCx = cx || this.cx;
+    activeCx?.notify();
+
+    activeCx?.spawn(async (spawnCx) => {
+      try {
+        await postWorkItemComment(profile, {
+          workItemId,
+          text: content,
+        });
+        this.wiCommentInput.set_value("");
+        try {
+          notify({
+            title: "Comment Posted",
+            body: content.length > 50 ? `${content.slice(0, 47)}...` : content,
+            level: "info",
+          });
+        } catch {
+          // Toast is non-critical feedback
+        }
+        await this.loadWIDetails(this.selectedWI, spawnCx);
+      } catch (err) {
+        this.error = `Failed to post comment: ${err.message || String(err)}`;
+      } finally {
+        this.submittingWIComment = false;
+        spawnCx.notify();
+      }
+    });
   }
 
   async loadWIDetails(item, cx) {
@@ -394,6 +498,9 @@ export default class AzureDevOpsMod extends View {
           changes: this.prChanges,
           subTab: this.prSubTab,
           threadStatus: this.prThreadStatusFilter,
+          getThreadInput: (id) => this.threadInputs.get(id),
+          onReplyThread: (id, cx) => this.submitPRReply(id, cx),
+          submittingThreadId: this.submittingThreadId,
           onThreadStatusChange: (status) => {
             this.prThreadStatusFilter = status;
             this.cx?.notify();
@@ -443,6 +550,9 @@ export default class AzureDevOpsMod extends View {
         content = renderWIDetail({
           item: this.selectedWI,
           comments: this.wiComments,
+          commentInput: this.wiCommentInput,
+          onPostComment: (id, cx) => this.submitWIComment(id, cx),
+          submittingComment: this.submittingWIComment,
           onBack: (_e, cx) => {
             this.selectedWI = null;
             const activeCx = cx || this.cx;

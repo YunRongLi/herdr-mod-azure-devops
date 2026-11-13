@@ -1,5 +1,5 @@
 import { div } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
+import { v_flex, h_flex, Input } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
 import { copyButton } from "../components/copy-button.js";
@@ -58,6 +58,9 @@ function formatThreadCopyText(thread, locationText, comments) {
  * @param {(thread: any, pr: any) => void} props.onSolveThread
  * @param {string} [props.threadStatus="all"]
  * @param {(status: string) => void} [props.onThreadStatusChange]
+ * @param {(threadId: number) => any} [props.getThreadInput]
+ * @param {(threadId: number, cx: any) => void} [props.onReplyThread]
+ * @param {number | null} [props.submittingThreadId]
  */
 export function renderPRThreads({
   threads = [],
@@ -65,6 +68,9 @@ export function renderPRThreads({
   onSolveThread,
   threadStatus = "all",
   onThreadStatusChange = () => {},
+  getThreadInput,
+  onReplyThread,
+  submittingThreadId = null,
 }) {
   const t = theme();
 
@@ -246,7 +252,61 @@ export function renderPRThreads({
                 )
             )
           )
-      );
+      )
+      .when(Boolean(getThreadInput && onReplyThread), (el) => {
+        const inputState = getThreadInput(thread.id);
+        const isSubmitting = submittingThreadId === thread.id;
+        if (!inputState) return el;
+
+        return el.child(
+          h_flex()
+            .w_full()
+            .mt(4)
+            .gap(6)
+            .items_center()
+            .child(
+              h_flex()
+                .flex_1()
+                .h(26)
+                .px(8)
+                .items_center()
+                .rounded(4)
+                .bg(t.chrome || "#252528")
+                .border_1()
+                .border_color(t.border || "#33353a")
+                .child(
+                  Input.new(inputState)
+                    .size_full()
+                    .text_size(11.5)
+                    .text_color(t.foreground || "#ffffff")
+                )
+            )
+            .child(
+              h_flex()
+                .h(26)
+                .px(10)
+                .items_center()
+                .rounded(4)
+                .bg(isSubmitting ? (t.chrome || "#252528") : (t.hover || "#2d2e34"))
+                .border_1()
+                .border_color(t.border || "#33353a")
+                .cursor_pointer()
+                .text_size(11)
+                .font_medium()
+                .text_color(isSubmitting ? (t.dim || "#6b7280") : (t.foreground || "#ffffff"))
+                .hover((s) => s.bg(t.selected || "#5b8def").text_color(t.foreground || "#ffffff"))
+                .on_click((_e, cx) => {
+                  if (cx && typeof cx.stop_propagation === "function") {
+                    cx.stop_propagation();
+                  }
+                  if (!isSubmitting) {
+                    onReplyThread(thread.id, cx);
+                  }
+                })
+                .child(isSubmitting ? "Posting..." : "Reply")
+            )
+        );
+      });
   };
 
   return v_flex()

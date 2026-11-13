@@ -1,5 +1,5 @@
 import { getAccessToken, clearAuthCache } from "./auth.js";
-import { assertSafeAdoUrl } from "./utils.js";
+import { assertSafeAdoUrl, sanitizeText } from "./utils.js";
 
 
 /**
@@ -365,4 +365,64 @@ export async function getWorkItemDetail(config, workItemId) {
   }
 
   return { item, comments };
+}
+
+/**
+ * Posts a reply comment to an existing Pull Request review thread.
+ *
+ * @param {import("./config.js").AdoConfig} config
+ * @param {Object} params
+ * @param {string} params.repositoryId Repository ID or name
+ * @param {number} params.pullRequestId Pull Request ID
+ * @param {number} params.threadId Thread ID
+ * @param {string} params.content Reply text
+ * @returns {Promise<any>}
+ */
+export async function postPullRequestThreadComment(config, { repositoryId, pullRequestId, threadId, content }) {
+  if (!content || !content.trim()) {
+    throw new Error("Comment content cannot be empty.");
+  }
+  const cleanContent = sanitizeText(content).trim();
+  const project = encodeURIComponent(config.project);
+  const repoId = encodeURIComponent(repositoryId);
+  const prId = encodeURIComponent(String(pullRequestId));
+  const tId = encodeURIComponent(String(threadId));
+
+  const url = `${config.organization}/${project}/_apis/git/repositories/${repoId}/pullRequests/${prId}/threads/${tId}/comments?api-version=7.1`;
+  return await request(url, {
+    method: "POST",
+    body: JSON.stringify({
+      content: cleanContent,
+      commentType: 1,
+    }),
+  });
+}
+
+/**
+ * Posts a comment to a Work Item discussion.
+ *
+ * @param {import("./config.js").AdoConfig} config
+ * @param {Object} params
+ * @param {number} params.workItemId Work Item ID
+ * @param {string} params.text Comment text
+ * @returns {Promise<any>}
+ */
+export async function postWorkItemComment(config, { workItemId, text }) {
+  if (!text || !text.trim()) {
+    throw new Error("Comment text cannot be empty.");
+  }
+  const cleanText = sanitizeText(text).trim();
+  const id = Number(workItemId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error(`Invalid work item ID: '${workItemId}'`);
+  }
+
+  const project = encodeURIComponent(config.project);
+  const url = `${config.organization}/${project}/_apis/wit/workitems/${id}/comments?api-version=7.1-preview.3`;
+  return await request(url, {
+    method: "POST",
+    body: JSON.stringify({
+      text: cleanText,
+    }),
+  });
 }

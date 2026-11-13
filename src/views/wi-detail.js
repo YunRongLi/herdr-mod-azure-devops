@@ -1,5 +1,5 @@
 import { div } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
+import { v_flex, h_flex, Input } from "gpui-base";
 import { theme } from "herdr";
 import { statusBadge } from "../components/status-badge.js";
 import { copyButton } from "../components/copy-button.js";
@@ -34,8 +34,19 @@ function stripHtml(html) {
  * @param {Array<any>} props.comments Discussion comments
  * @param {(event: any, cx: any) => void} props.onBack Callback to return to list
  * @param {(item: any, comments: Array<any>) => void} props.onSolveWithAgent
+ * @param {any} [props.commentInput]
+ * @param {(workItemId: number, cx: any) => void} [props.onPostComment]
+ * @param {boolean} [props.submittingComment=false]
  */
-export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }) {
+export function renderWIDetail({
+  item,
+  comments = [],
+  onBack,
+  onSolveWithAgent,
+  commentInput,
+  onPostComment,
+  submittingComment = false,
+}) {
   const t = theme();
 
   const handleOpenInBrowser = async () => {
@@ -232,6 +243,55 @@ export function renderWIDetail({ item, comments = [], onBack, onSolveWithAgent }
                 .font_medium()
                 .text_color(t.dim)
                 .child(`Discussion (${comments.length})`)
+            )
+            .when(Boolean(commentInput && onPostComment), (el) =>
+              el.child(
+                h_flex()
+                  .w_full()
+                  .gap(6)
+                  .items_center()
+                  .child(
+                    h_flex()
+                      .flex_1()
+                      .h(28)
+                      .px(8)
+                      .items_center()
+                      .rounded(4)
+                      .bg(t.chrome || "#252528")
+                      .border_1()
+                      .border_color(t.border || "#33353a")
+                      .child(
+                        Input.new(commentInput)
+                          .size_full()
+                          .text_size(12)
+                          .text_color(t.foreground || "#ffffff")
+                      )
+                  )
+                  .child(
+                    h_flex()
+                      .h(28)
+                      .px(12)
+                      .items_center()
+                      .rounded(4)
+                      .bg(submittingComment ? (t.chrome || "#252528") : (t.hover || "#2d2e34"))
+                      .border_1()
+                      .border_color(t.border || "#33353a")
+                      .cursor_pointer()
+                      .text_size(11.5)
+                      .font_medium()
+                      .text_color(submittingComment ? (t.dim || "#6b7280") : (t.foreground || "#ffffff"))
+                      .hover((s) => s.bg(t.selected || "#5b8def").text_color(t.foreground || "#ffffff"))
+                      .on_click((_e, cx) => {
+                        if (cx && typeof cx.stop_propagation === "function") {
+                          cx.stop_propagation();
+                        }
+                        if (!submittingComment) {
+                          onPostComment(item.id, cx);
+                        }
+                      })
+                      .child(submittingComment ? "Posting..." : "Post")
+                  )
+              )
             )
             .when(comments.length === 0, (el) =>
               el.child(

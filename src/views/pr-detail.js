@@ -21,6 +21,9 @@ import { openExternalUrl } from "../utils.js";
  * @param {(thread: any, pr: any) => void} props.onSolveThread Callback to dispatch thread to agent
  * @param {string} [props.threadStatus="all"] Active PR thread status filter
  * @param {(status: string) => void} [props.onThreadStatusChange]
+ * @param {(threadId: number) => any} [props.getThreadInput]
+ * @param {(threadId: number, cx: any) => void} [props.onReplyThread]
+ * @param {number | null} [props.submittingThreadId]
  */
 export function renderPRDetail({
   pr,
@@ -33,6 +36,9 @@ export function renderPRDetail({
   onSolveThread,
   threadStatus = "all",
   onThreadStatusChange = () => {},
+  getThreadInput,
+  onReplyThread,
+  submittingThreadId = null,
 }) {
   const t = theme();
 
@@ -305,6 +311,9 @@ export function renderPRDetail({
                 onSolveThread,
                 threadStatus,
                 onThreadStatusChange,
+                getThreadInput,
+                onReplyThread,
+                submittingThreadId,
               })
             : renderChanges()
         )
