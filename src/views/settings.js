@@ -3,7 +3,9 @@ import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { theme } from "herdr";
 import {
   loadConfig,
+  getActiveProfile,
   addProfile,
+  updateProfile,
   removeProfile,
   setActiveProfile,
   setAgentRunner,
@@ -15,14 +17,22 @@ import { assertSafeAdoUrl, isValidAgentName } from "../utils.js";
 export class SettingsView {
   /**
    * @param {Object} options
-   * @param {() => void} options.onDone Callback when settings view is closed
+   * @param {() => void} [options.onDone] Callback when settings view is closed
+   * @param {boolean} [options.isDialog] Whether displayed in overlay dialog mode
    */
-  constructor({ onDone }) {
-    this.onDone = onDone;
+  constructor({ onDone, isDialog = false } = {}) {
+    this.onDone = onDone || (() => {});
+    this.isDialog = isDialog;
+    this.lastActiveProfileId = null;
 
     this.nameInput = InputState.new({ placeholder: "Display Label (e.g., Alpha Team)" });
     this.orgInput = InputState.new({ placeholder: "https://dev.azure.com/Organization" });
     this.projectInput = InputState.new({ placeholder: "Project Name" });
+    this.newProfileUserInput = InputState.new({ placeholder: "e.g., Jane Doe or user@example.com (optional)" });
+
+    const activeProfile = getActiveProfile();
+    this.userInput = InputState.new({ placeholder: "e.g., Jane Doe or user@example.com (optional)" });
+    this.userInput.set_value(activeProfile?.user || "");
 
     const currentConfig = loadConfig();
     this.agentInput = InputState.new({ placeholder: "claude" });
@@ -67,11 +77,15 @@ export class SettingsView {
       return;
     }
 
+    const user = this.newProfileUserInput.value().trim();
+
     try {
-      addProfile({ name, organization: org, project, setAsActive: true });
+      addProfile({ name, organization: org, project, user, setAsActive: true });
       this.nameInput.set_value("");
       this.orgInput.set_value("");
       this.projectInput.set_value("");
+      this.newProfileUserInput.set_value("");
+      this.userInput.set_value(user);
       this.errorMessage = null;
       this.successMessage = `Added and selected project '${project}'!`;
     } catch (err) {
@@ -83,15 +97,35 @@ export class SettingsView {
 
   handleRemoveProfile(profileId, cx) {
     removeProfile(profileId);
+    const active = getActiveProfile();
+    this.userInput.set_value(active?.user || "");
     this.errorMessage = null;
     this.successMessage = "Profile removed.";
     cx.notify();
   }
 
   handleSelectActive(profileId, cx) {
-    setActiveProfile(profileId);
+    const updated = setActiveProfile(profileId);
+    this.userInput.set_value(updated?.user || "");
     this.errorMessage = null;
     this.successMessage = "Active project updated.";
+    cx.notify();
+  }
+
+  handleSaveUser(cx) {
+    const active = getActiveProfile();
+    if (!active) {
+      this.errorMessage = "Please add or select a project target first.";
+      this.successMessage = null;
+      cx.notify();
+      return;
+    }
+    const user = this.userInput.value().trim();
+    updateProfile(active.id, { user });
+    this.errorMessage = null;
+    this.successMessage = user
+      ? `Saved user filter '${user}' for active project.`
+      : "Cleared user filter; Pull Requests will use default identity.";
     cx.notify();
   }
 
@@ -112,7 +146,14 @@ export class SettingsView {
   render() {
     const t = theme();
     const config = loadConfig();
-    const canExit = isConfigured();
+    const activeProfile = getActiveProfile();
+
+    if (activeProfile && activeProfile.id !== this.lastActiveProfileId) {
+      this.lastActiveProfileId = activeProfile.id;
+      this.userInput.set_value(activeProfile.user || "");
+    }
+
+    const canExit = isConfigured() || this.isDialog;
 
     const fieldLabel = (text) =>
       div().text_size(11).text_color(t.muted).mb(3).child(text);
@@ -183,6 +224,20 @@ export class SettingsView {
                       .child("Active")
                   )
                 )
+                .when(Boolean(p.user), (el) =>
+                  el.child(
+                    div()
+                      .px(4)
+                      .py(1)
+                      .rounded(3)
+                      .bg(t.chrome)
+                      .border_1()
+                      .border_color(t.border)
+                      .text_size(9)
+                      .text_color(t.muted)
+                      .child(`User: ${p.user}`)
+                  )
+                )
             )
             .child(
               div()
@@ -247,11 +302,11 @@ export class SettingsView {
             h_flex()
               .gap(8)
               .items_center()
-              .child(svg("assets/settings.svg").size(16).text_color(t.foreground))
+              .child(svg("mods/azure-devops/assets/settings.svg").size(16).text_color(t.foreground))
               .child(div().text_size(14).text_color(t.foreground).child("Azure DevOps Settings"))
           )
           .when(canExit, (el) =>
-            el.child(button("btn-settings-done", "Done", true, () => this.onDone()))
+            el.child(button("btn-settings-done", this.isDialog ? "Close" : "Done", true, (cx) => this.onDone(cx)))
           )
       )
       .when(Boolean(this.errorMessage), (el) =>
@@ -290,6 +345,46 @@ export class SettingsView {
             el.children(config.profiles.map(profileRow))
           )
       )
+      .when(Boolean(activeProfile), (el) =>
+        el.child(
+          v_flex()
+            .w_full()
+            .p(10)
+            .gap(8)
+            .rounded(6)
+            .bg(t.background)
+            .border_1()
+            .border_color(t.border)
+            .child(
+              v_flex()
+                .gap(2)
+                .child(
+                  div()
+                    .text_size(12)
+                    .font_semibold()
+                    .text_color(t.foreground)
+                    .child(`Active Profile Filter: ${activeProfile.name}`)
+                )
+                .child(
+                  div()
+                    .text_size(10)
+                    .text_color(t.dim)
+                    .child("Filters Pull Requests (Created by Me & Assigned to Me) by display name or email. Work Items continue using @me.")
+                )
+            )
+            .child(
+              v_flex()
+                .gap(3)
+                .child(fieldLabel("Target User Name or Email (e.g., Jane Doe)"))
+                .child(inputWrapper(this.userInput))
+            )
+            .child(
+              h_flex()
+                .mt(4)
+                .child(button("btn-save-user", "Save User Filter", false, (cx) => this.handleSaveUser(cx)))
+            )
+        )
+      )
       .child(
         v_flex()
           .w_full()
@@ -317,6 +412,12 @@ export class SettingsView {
               .gap(3)
               .child(fieldLabel("Project Name"))
               .child(inputWrapper(this.projectInput))
+          )
+          .child(
+            v_flex()
+              .gap(3)
+              .child(fieldLabel("Target User Name (optional)"))
+              .child(inputWrapper(this.newProfileUserInput))
           )
           .child(
             h_flex()

@@ -1,6 +1,6 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { theme, run } from "herdr";
+import { theme, run, props, openOverlay, closeOverlay } from "herdr";
 import {
   loadConfig,
   getActiveProfile,
@@ -31,6 +31,10 @@ import { renderWIDetail } from "./src/views/wi-detail.js";
 export default class AzureDevOpsMod extends View {
   init(_props, cx) {
     this.cx = cx;
+    const p = props() ?? {};
+    this.isDialog = p.role === "settings";
+    this.dialogOverlayId = p.overlay;
+
     this.mode = "prs"; // "prs" | "workitems"
     this.showingSettings = !isConfigured();
     this.isProfileMenuOpen = false;
@@ -49,22 +53,49 @@ export default class AzureDevOpsMod extends View {
 
     this.loading = false;
     this.error = null;
+    const initialProfile = getActiveProfile();
+    this.lastProfileSignature = initialProfile ? `${initialProfile.id}:${initialProfile.user || ""}` : null;
 
     this.settingsView = new SettingsView({
-      onDone: () => {
-        this.showingSettings = false;
-        this.isProfileMenuOpen = false;
-        this.refresh(cx);
+      isDialog: this.isDialog,
+      onDone: (doneCx) => {
+        const overlayId = props()?.overlay || this.dialogOverlayId;
+        if (overlayId) {
+          closeOverlay(overlayId);
+        } else {
+          this.showingSettings = false;
+          this.isProfileMenuOpen = false;
+          const p = getActiveProfile();
+          this.lastProfileSignature = p ? `${p.id}:${p.user || ""}` : null;
+          const activeCx = doneCx || this.cx || cx;
+          if (activeCx) {
+            this.refresh(activeCx);
+          }
+        }
       },
     });
 
-    if (isConfigured()) {
+    if (isConfigured() && !this.isDialog) {
       this.refresh(cx);
     }
 
     // Refresh every 2 minutes
     cx.timer.every(120000, (timerCx) => {
       if (!this.showingSettings && isConfigured()) {
+        this.refresh(timerCx);
+      }
+    });
+
+    // Detect profile or target user configuration changes every second
+    cx.timer.every(1000, (timerCx) => {
+      if (this.isDialog || this.showingSettings || !isConfigured()) return;
+      const profile = getActiveProfile();
+      const currentSignature = profile ? `${profile.id}:${profile.user || ""}` : null;
+      if (this.lastProfileSignature !== null && this.lastProfileSignature !== currentSignature) {
+        this.lastProfileSignature = currentSignature;
+        this.selectedPR = null;
+        this.selectedWI = null;
+        this.user = null;
         this.refresh(timerCx);
       }
     });
@@ -98,6 +129,7 @@ export default class AzureDevOpsMod extends View {
           const prs = await getPullRequests(profile, {
             filter: this.prFilter,
             userId: this.user?.id,
+            user: profile.user,
           });
           this.prs = prs;
 
@@ -165,6 +197,8 @@ export default class AzureDevOpsMod extends View {
 
   switchProfile(profileId, cx) {
     setActiveProfile(profileId);
+    const profile = getActiveProfile();
+    this.lastProfileSignature = profile ? `${profile.id}:${profile.user || ""}` : null;
     this.isProfileMenuOpen = false;
     this.selectedPR = null;
     this.selectedWI = null;
@@ -177,9 +211,11 @@ export default class AzureDevOpsMod extends View {
   render() {
     const t = theme();
     const config = loadConfig();
-    const activeProfile = getActiveProfile();
 
-    if (this.showingSettings) {
+    const p = props() || {};
+    const isOverlayDialog = Boolean(this.isDialog || p.role === "settings" || p.overlay);
+
+    if (this.showingSettings || isOverlayDialog) {
       return this.settingsView.render();
     }
 
@@ -196,9 +232,13 @@ export default class AzureDevOpsMod extends View {
         }
       },
       onRefresh: (cx) => this.refresh(cx),
-      onOpenSettings: () => {
+      onOpenSettings: (openCx) => {
         this.showingSettings = true;
         this.isProfileMenuOpen = false;
+        const activeCx = openCx || this.cx;
+        if (activeCx) {
+          activeCx.notify();
+        }
       },
       onOpenAsTab: () => {
         run("tab.new", { name: "Azure DevOps", mod: "azure-devops" });

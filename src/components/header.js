@@ -46,7 +46,7 @@ export function renderHeader({
       .items_center()
       .rounded(5)
       .text_size(12)
-      .bg(active ? t.selected : "transparent")
+      .when(active, (el) => el.bg(t.selected))
       .text_color(active ? t.foreground : t.muted)
       .hover((s) => s.bg(active ? t.selected : t.hover))
       .on_click(() => onModeChange(id))
@@ -62,6 +62,7 @@ export function renderHeader({
       .rounded(5)
       .text_color(t.muted)
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .when(Boolean(tooltip), (el) => el.tooltip(tooltip))
       .on_click((_e, cx) => onClick(cx))
       .child(
         spin
@@ -107,7 +108,7 @@ export function renderHeader({
               .items_center()
               .justify_between()
               .rounded(4)
-              .bg(isSelected ? t.selected : "transparent")
+              .when(isSelected, (el) => el.bg(t.selected))
               .hover((s) => s.bg(isSelected ? t.selected : t.hover))
               .text_size(11)
               .text_color(isSelected ? t.foreground : t.muted)
@@ -138,7 +139,7 @@ export function renderHeader({
             .text_color(t.dim)
             .on_click((_e, cx) => {
               cx.stop_propagation();
-              onOpenSettings();
+              onOpenSettings(cx);
             })
             .child("+ Add / Manage Projects in Settings...")
         )
@@ -161,18 +162,18 @@ export function renderHeader({
             .gap(4)
             .flex_1()
             .items_center()
-            .child(tabPill("prs", "Pull Requests", "assets/pr.svg", mode === "prs"))
-            .child(tabPill("workitems", "Work Items", "assets/wi.svg", mode === "workitems"))
+            .child(tabPill("prs", "Pull Requests", "mods/azure-devops/assets/pr.svg", mode === "prs"))
+            .child(tabPill("workitems", "Work Items", "mods/azure-devops/assets/wi.svg", mode === "workitems"))
         )
         .when(profiles.length > 0, (el) => el.child(profileSwitcher))
         .child(
           h_flex()
             .gap(2)
             .items_center()
-            .child(iconAction("btn-header-tab", "assets/tab.svg", "Open as Tab", onOpenAsTab))
-            .child(iconAction("btn-header-split", "assets/split.svg", "Split Pane Beside Terminal", onSplitPane))
-            .child(iconAction("btn-header-refresh", "assets/refresh.svg", "Refresh", onRefresh, loading))
-            .child(iconAction("btn-header-settings", "assets/settings.svg", "Settings", onOpenSettings))
+            .child(iconAction("btn-header-tab", "mods/azure-devops/assets/tab.svg", "Open as Tab", onOpenAsTab))
+            .child(iconAction("btn-header-split", "mods/azure-devops/assets/split.svg", "Split Pane Beside Terminal", onSplitPane))
+            .child(iconAction("btn-header-refresh", "mods/azure-devops/assets/refresh.svg", "Refresh", onRefresh, loading))
+            .child(iconAction("btn-header-settings", "mods/azure-devops/assets/settings.svg", "Settings", onOpenSettings))
         )
     )
     .when(Boolean(profileDropdown), (el) => el.child(profileDropdown));

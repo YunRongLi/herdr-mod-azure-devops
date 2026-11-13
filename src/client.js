@@ -1,7 +1,6 @@
 import { getAccessToken, clearAuthCache } from "./auth.js";
 import { assertSafeAdoUrl } from "./utils.js";
 
-const REQUEST_TIMEOUT_MS = 15000;
 
 /**
  * Helper to execute an authenticated fetch request against ADO REST API.
@@ -26,42 +25,19 @@ async function request(url, options = {}) {
       ...(options.headers || {}),
     };
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    try {
-      return await fetch(url, {
-        ...options,
-        headers,
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    return await fetch(url, {
+      ...options,
+      headers,
+    });
   };
 
-  let response;
-  try {
-    response = await makeCall(token);
-  } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s while contacting Azure DevOps.`);
-    }
-    throw err;
-  }
+  let response = await makeCall(token);
 
   // If token expired, clear cache and retry once
   if (response.status === 401) {
     clearAuthCache();
     token = await getAccessToken({ forceRefresh: true });
-    try {
-      response = await makeCall(token);
-    } catch (err) {
-      if (err.name === "AbortError") {
-        throw new Error(`Retry request timed out after ${REQUEST_TIMEOUT_MS / 1000}s.`);
-      }
-      throw err;
-    }
+    response = await makeCall(token);
   }
 
   if (!response.ok) {
@@ -104,11 +80,13 @@ export async function getCurrentUser(config) {
  * @returns {Promise<Array<any>>}
  */
 export async function getPullRequests(config, options = {}) {
-  const { filter = "assigned", userId } = options;
+  const { filter = "assigned", userId, user } = options;
+  const targetUser = (user || config.user || "").trim();
   const project = encodeURIComponent(config.project);
-  let query = `searchCriteria.status=active&api-version=7.1&$top=50`;
+  let query = `searchCriteria.status=active&api-version=7.1&$top=100`;
 
-  if (userId) {
+  // If no target username is configured, use server-side GUID query if available
+  if (!targetUser && userId) {
     if (filter === "mine") {
       query += `&searchCriteria.creatorId=${encodeURIComponent(userId)}`;
     } else if (filter === "assigned") {
@@ -118,13 +96,20 @@ export async function getPullRequests(config, options = {}) {
 
   const url = `${config.organization}/${project}/_apis/git/pullrequests?${query}`;
   const data = await request(url);
-  return (data.value || []).map((pr) => ({
+  let prs = (data.value || []).map((pr) => ({
     id: pr.pullRequestId,
     title: pr.title || `PR #${pr.pullRequestId}`,
     description: pr.description || "",
     status: pr.status,
     author: pr.createdBy?.displayName || "Unknown",
     authorId: pr.createdBy?.id,
+    authorEmail: pr.createdBy?.uniqueName || "",
+    reviewers: (pr.reviewers || []).map((r) => ({
+      id: r.id,
+      displayName: r.displayName || "",
+      uniqueName: r.uniqueName || "",
+      vote: r.vote || 0,
+    })),
     authorAvatar: pr.createdBy?._links?.avatar?.href,
     repositoryId: pr.repository?.id,
     repositoryName: pr.repository?.name,
@@ -133,6 +118,25 @@ export async function getPullRequests(config, options = {}) {
     creationDate: pr.creationDate,
     url: pr._links?.web?.href || `${config.organization}/${project}/_git/${encodeURIComponent(pr.repository?.name || "")}/pullrequest/${pr.pullRequestId}`,
   }));
+
+  if (targetUser) {
+    const term = targetUser.toLowerCase();
+    if (filter === "mine") {
+      prs = prs.filter((p) =>
+        p.author.toLowerCase().includes(term) ||
+        p.authorEmail.toLowerCase().includes(term)
+      );
+    } else if (filter === "assigned") {
+      prs = prs.filter((p) =>
+        p.reviewers.some((r) =>
+          r.displayName.toLowerCase().includes(term) ||
+          r.uniqueName.toLowerCase().includes(term)
+        )
+      );
+    }
+  }
+
+  return prs;
 }
 
 /**

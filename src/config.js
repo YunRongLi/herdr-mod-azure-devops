@@ -9,6 +9,7 @@ const CONFIG_KEY = "azure-devops.config";
  * @property {string} name Friendly display name (e.g., "OrgAlpha / ProjectA")
  * @property {string} organization Organization URL (https://dev.azure.com/org)
  * @property {string} project Project name
+ * @property {string} [user] Optional target user name or email for Pull Requests
  */
 
 /**
@@ -85,6 +86,7 @@ export function loadConfig() {
           name: sanitizeText(p.name || defaultProfileName(p.organization, p.project)).trim(),
           organization: cleanOrgUrl(p.organization),
           project: sanitizeText(p.project).trim(),
+          user: typeof p.user === "string" ? sanitizeText(p.user).trim() : "",
         }));
       activeProfileId = String(stored.activeProfileId || (profiles[0] ? profiles[0].id : ""));
     } else if (stored.organization && stored.project) {
@@ -96,6 +98,7 @@ export function loadConfig() {
         name: defaultProfileName(org, proj),
         organization: org,
         project: proj,
+        user: typeof stored.user === "string" ? sanitizeText(stored.user).trim() : "",
       };
       profiles = [legacyProfile];
       activeProfileId = "default";
@@ -152,10 +155,11 @@ export function setActiveProfile(profileId) {
  * @param {string} [params.name]
  * @param {string} params.organization
  * @param {string} params.project
+ * @param {string} [params.user]
  * @param {boolean} [params.setAsActive=true]
  * @returns {AdoProfile}
  */
-export function addProfile({ name, organization, project, setAsActive = true }) {
+export function addProfile({ name, organization, project, user = "", setAsActive = true }) {
   const config = loadConfig();
   const cleanedOrg = cleanOrgUrl(organization);
   assertSafeAdoUrl(cleanedOrg);
@@ -173,6 +177,7 @@ export function addProfile({ name, organization, project, setAsActive = true }) 
     name: label,
     organization: cleanedOrg,
     project: sanitizedProject,
+    user: sanitizeText(user || "").trim(),
   };
 
   config.profiles.push(newProfile);
@@ -182,6 +187,45 @@ export function addProfile({ name, organization, project, setAsActive = true }) 
 
   saveConfig(config);
   return newProfile;
+}
+
+/**
+ * Updates an existing profile's properties.
+ *
+ * @param {string} profileId
+ * @param {Object} updates
+ * @param {string} [updates.name]
+ * @param {string} [updates.organization]
+ * @param {string} [updates.project]
+ * @param {string} [updates.user]
+ * @returns {AdoProfile | null}
+ */
+export function updateProfile(profileId, updates = {}) {
+  const config = loadConfig();
+  const profile = config.profiles.find((p) => p.id === profileId);
+  if (!profile) return null;
+
+  if (updates.organization) {
+    const cleanedOrg = cleanOrgUrl(updates.organization);
+    assertSafeAdoUrl(cleanedOrg);
+    profile.organization = cleanedOrg;
+  }
+  if (updates.project) {
+    const sanitizedProject = sanitizeText(updates.project).trim();
+    if (!isValidProjectName(sanitizedProject)) {
+      throw new Error("Project name contains invalid characters. Use letters, numbers, spaces, and hyphens.");
+    }
+    profile.project = sanitizedProject;
+  }
+  if (updates.name !== undefined) {
+    profile.name = sanitizeText(updates.name).trim();
+  }
+  if (updates.user !== undefined) {
+    profile.user = sanitizeText(updates.user).trim();
+  }
+
+  saveConfig(config);
+  return profile;
 }
 
 /**
