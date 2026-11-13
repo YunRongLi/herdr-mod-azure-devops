@@ -18,7 +18,12 @@ Monitor, inspect, and interact with Azure DevOps Pull Requests and Work Items di
   - Query active assigned Work Items.
   - View full descriptions and discussion comments.
 - One-Click Agent Delegation:
-  - "Solve with Agent" dispatches formatted task prompts directly into a new Herdr agent tab (`tab.new`) or active terminal (`hc send`).
+  - "Solve with Agent" formats a PR/thread/work-item prompt and routes it to a coding agent.
+  - Routes to an existing **idle** agent (via `hc send`) when one is available, otherwise spawns a
+    new Herdr agent tab (`tab.new`) running your preferred executable.
+  - When several idle agents are available, an inline picker lets you choose one (same-space
+    agent pre-selected); a single idle agent is used automatically.
+  - **Never drives Antigravity** (`agy` / `antigravity`) under a consumer plan — see below.
 
 ## Quick Install (Automated)
 
@@ -58,3 +63,29 @@ herdr-app check ~/.config/herdr-app/mods/azure-devops
   ```bash
   herdr-app do pane.split '{"direction":"right","mod":"azure-devops"}'
   ```
+
+## Solve with Agent — Routing & Guardrails
+
+Clicking **"Solve with Agent"** on a PR or a review thread formats a hardened prompt and hands it
+to a coding agent. Routing (decided purely from live agent state, then executed):
+
+1. **Blocked → decline.** If the only way to run would be to drive Antigravity and no other idle
+   agent exists, the mod declines with a notice and sends nothing.
+2. **Exactly one idle agent → auto-send.** The prompt is sent straight to it (`hc send`).
+3. **Multiple idle agents → picker.** An inline picker lists the idle agents (the one sharing this
+   mod's space is pre-highlighted); pick one to receive the prompt.
+4. **No idle agents → spawn.** A new Herdr agent tab opens running your preferred executable
+   (`claude` by default) with the prompt as its first message.
+
+**Preferred executable.** Set in Settings → *Coding Agent Integration → Preferred Agent
+Executable*. Valid values are launcher names such as `claude`, `pi`, or `codex` (alphanumeric and
+hyphens). `pi` is a first-class supported runner.
+
+**Antigravity guardrail.** This is a third-party mod. Driving Antigravity/Gemini CLI (`agy` /
+`antigravity`) from it under a consumer plan violates Antigravity's consumer FAQ/ToS (account
+suspension risk), so the mod never wraps or drives it. An agent is treated as Antigravity when its
+reported `app` or terminal `argv` contains `agy` or `antigravity`; such agents are never offered in
+the picker and never auto-selected. If your preferred executable is itself `agy`/`antigravity`, the
+mod only declines when there is no other idle agent to route to — if a `pi`/`claude`/`codex` agent
+is idle, it is used instead. When nothing is idle and the preferred executable is `agy`/`antigravity`,
+the mod reports an error (it will not spawn or drive `agy`).

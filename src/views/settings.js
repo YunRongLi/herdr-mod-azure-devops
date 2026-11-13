@@ -440,6 +440,13 @@ export class SettingsView {
               .gap(3)
               .child(fieldLabel("Preferred Agent Executable"))
               .child(inputWrapper(this.agentInput))
+              .child(
+                div()
+                  .mt(2)
+                  .text_size(10)
+                  .text_color(t.dim)
+                  .child("Executable launched for new agents, e.g. claude, pi, or codex. Antigravity (agy/antigravity) is never driven from here.")
+              )
           )
           .child(
             h_flex()

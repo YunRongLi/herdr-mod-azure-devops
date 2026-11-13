@@ -1,6 +1,6 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { theme, run, props, openOverlay, closeOverlay } from "herdr";
+import { theme, run, props, openOverlay, closeOverlay, focused, notify } from "herdr";
 import {
   loadConfig,
   getActiveProfile,
@@ -20,11 +20,15 @@ import {
   formatPRPrompt,
   formatWorkItemPrompt,
   dispatchAgentTask,
+  planAgentRouting,
+  sendToTerminal,
+  launchNewAgent,
 } from "./src/agent.js";
 import { renderHeader } from "./src/components/header.js";
 import { SettingsView } from "./src/views/settings.js";
 import { renderPRList } from "./src/views/pr-list.js";
 import { renderPRDetail } from "./src/views/pr-detail.js";
+import { renderAgentPicker } from "./src/views/agent-picker.js";
 import { renderWIList } from "./src/views/wi-list.js";
 import { renderWIDetail } from "./src/views/wi-detail.js";
 
@@ -40,9 +44,10 @@ export default class AzureDevOpsMod extends View {
     this.isProfileMenuOpen = false;
 
     this.user = null;
-    this.prFilter = "assigned";
+    this.prFilter = "mine";
     this.prs = [];
     this.selectedPR = null;
+    this.agentPicker = null;
     this.prThreads = [];
     this.prChanges = [];
     this.prSubTab = "threads";
@@ -203,10 +208,63 @@ export default class AzureDevOpsMod extends View {
     this.isProfileMenuOpen = false;
     this.selectedPR = null;
     this.selectedWI = null;
+    this.agentPicker = null;
     this.user = null;
     this.prs = [];
     this.workItems = [];
     this.refresh(cx);
+  }
+
+  /**
+   * Routes a "Solve with Agent" task per `planAgentRouting`: declined if the configured runner
+   * is `agy`; auto-sent to a lone idle agent; otherwise opens the idle-agent picker. Never
+   * drives `agy` in any path.
+   *
+   * @param {Object} params
+   * @param {string} params.title Tab/context title.
+   * @param {string} params.prompt Formatted, hardened agent prompt.
+   */
+  beginSolve({ title, prompt }) {
+    // A fresh solve request always supersedes any previously opened picker.
+    this.agentPicker = null;
+    try {
+      const currentSpace = focused()?.space ?? null;
+      const { blockedByAgy, idleAgents } = planAgentRouting({
+        agent: loadConfig().agent,
+        currentSpace,
+      });
+
+      if (blockedByAgy) {
+        notify({
+          title: "Can't drive Antigravity (agy) here",
+          body: "Run 'agy -p' directly, or use a Gemini Enterprise / AI Studio API key.",
+          level: "warning",
+        });
+        return;
+      }
+
+      if (idleAgents.length === 1) {
+        sendToTerminal({ terminal: idleAgents[0].terminal, prompt });
+        return;
+      }
+
+      if (idleAgents.length > 1) {
+        this.agentPicker = { title, prompt, candidates: idleAgents };
+        notify({
+          title: `${idleAgents.length} idle agents available for ${title}`,
+          body: "Pick one to solve it.",
+        });
+        this.cx?.notify();
+        return;
+      }
+
+      // No idle agent to route to: spawn a fresh tab with the configured runner. (If the
+      // configured runner is `agy`/`antigravity`, `blockedByAgy` above already declined, so this
+      // path only runs with a non-`agy` runner.)
+      launchNewAgent({ agent: loadConfig().agent, title, prompt });
+    } catch (err) {
+      notify({ title: `Solve with Agent error: ${err?.message || err}`, level: "error" });
+    }
   }
 
   render() {
@@ -227,6 +285,7 @@ export default class AzureDevOpsMod extends View {
           this.mode = nextMode;
           this.selectedPR = null;
           this.selectedWI = null;
+          this.agentPicker = null;
           this.error = null;
           this.isProfileMenuOpen = false;
           this.refresh(this.cx || { notify: () => {} });
@@ -294,7 +353,22 @@ export default class AzureDevOpsMod extends View {
       : null;
 
     let content;
-    if (this.mode === "prs") {
+    if (this.agentPicker) {
+      content = renderAgentPicker({
+        title: this.agentPicker.title,
+        candidates: this.agentPicker.candidates,
+        onSelect: (terminal) => {
+          const pending = this.agentPicker;
+          this.agentPicker = null;
+          if (pending) sendToTerminal({ terminal, prompt: pending.prompt });
+          this.cx?.notify();
+        },
+        onCancel: () => {
+          this.agentPicker = null;
+          this.cx?.notify();
+        },
+      });
+    } else if (this.mode === "prs") {
       if (this.selectedPR) {
         content = renderPRDetail({
           pr: this.selectedPR,
@@ -312,14 +386,12 @@ export default class AzureDevOpsMod extends View {
             if (activeCx) activeCx.notify();
           },
           onSolvePR: (pr) => {
-            const prompt = formatPRPrompt(pr);
-            dispatchAgentTask({ title: `PR #${pr.id}`, prompt });
+            this.beginSolve({ title: `PR #${pr.id}`, prompt: formatPRPrompt(pr) });
           },
           onSolveThread: (thread, pr) => {
-            const prompt = formatPRThreadPrompt({ thread, pr });
-            dispatchAgentTask({
+            this.beginSolve({
               title: `PR #${pr.id} Comment`,
-              prompt,
+              prompt: formatPRThreadPrompt({ thread, pr }),
             });
           },
         });
