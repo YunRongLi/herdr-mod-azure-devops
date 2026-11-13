@@ -24,7 +24,7 @@ export function renderPRList({ prs = [], filter = "assigned", onFilterChange, on
       .items_center()
       .rounded(4)
       .text_size(11)
-      .bg(active ? t.selected : "transparent")
+      .when(active, (el) => el.bg(t.selected))
       .text_color(active ? t.foreground : t.muted)
       .hover((s) => s.bg(active ? t.selected : t.hover))
       .on_click(() => onFilterChange(id))
