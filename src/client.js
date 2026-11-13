@@ -232,29 +232,53 @@ export async function getPullRequestChanges(config, { repositoryId, pullRequestI
 }
 
 /**
- * Lists active Work Items assigned to the current user.
+ * Lists active Work Items assigned to the current user with status and type filters.
  *
  * @param {import("./config.js").AdoConfig} config
- * @param {{ status?: "active" | "resolved" | "closed" | "wontfix" | "all" }} [options]
+ * @param {{
+ *   status?: "active" | "todo" | "in_progress" | "committed" | "resolved" | "not_started" | "removed" | "all",
+ *   type?: "task" | "bug" | "feature" | "pbi" | "all"
+ * }} [options]
  * @returns {Promise<Array<any>>}
  */
 export async function getAssignedWorkItems(config, options = {}) {
-  const { status = "active" } = options;
+  const { status = "active", type = "all" } = options;
   const project = encodeURIComponent(config.project);
   const wiqlUrl = `${config.organization}/${project}/_apis/wit/wiql?api-version=7.1`;
 
+  const normStatus = (status || "active").toLowerCase().replace(/[^a-z]/g, "");
   let stateFilter = "";
-  if (status === "all") {
+  if (normStatus === "all") {
     stateFilter = "";
-  } else if (status === "resolved") {
-    stateFilter = "AND [System.State] = 'Resolved'";
-  } else if (status === "closed") {
-    stateFilter = "AND ([System.State] = 'Closed' OR [System.State] = 'Done')";
-  } else if (status === "wontfix") {
-    stateFilter = "AND ([System.State] = 'Removed' OR [System.State] = 'Won\\'t Fix')";
+  } else if (normStatus === "todo") {
+    stateFilter = "AND [System.State] IN ('To Do', 'Todo', 'New', 'Not Started', 'Proposed')";
+  } else if (normStatus === "notstarted") {
+    stateFilter = "AND [System.State] IN ('Not Started', 'To Do', 'New')";
+  } else if (normStatus === "inprogress" || normStatus === "doing") {
+    stateFilter = "AND [System.State] IN ('In Progress', 'Doing')";
+  } else if (normStatus === "committed" || normStatus === "commited" || normStatus === "approved") {
+    stateFilter = "AND [System.State] IN ('Committed', 'Approved')";
+  } else if (normStatus === "resolved") {
+    stateFilter = "AND [System.State] IN ('Resolved', 'Done', 'Closed')";
+  } else if (normStatus === "removed") {
+    stateFilter = "AND [System.State] = 'Removed'";
   } else {
     // "active" (default)
     stateFilter = "AND [System.State] <> 'Closed' AND [System.State] <> 'Done' AND [System.State] <> 'Removed'";
+  }
+
+  const normType = (type || "all").toLowerCase().replace(/[^a-z]/g, "");
+  let typeFilter = "";
+  if (normType === "all") {
+    typeFilter = "";
+  } else if (normType === "task") {
+    typeFilter = "AND [System.WorkItemType] = 'Task'";
+  } else if (normType === "bug" || normType === "issue") {
+    typeFilter = "AND ([System.WorkItemType] = 'Bug' OR [System.WorkItemType] = 'Issue')";
+  } else if (normType === "feature") {
+    typeFilter = "AND [System.WorkItemType] = 'Feature'";
+  } else if (normType === "pbi" || normType === "productbacklogitem" || normType === "userstory") {
+    typeFilter = "AND ([System.WorkItemType] = 'Product Backlog Item' OR [System.WorkItemType] = 'User Story')";
   }
 
   const wiqlQuery = {
@@ -262,6 +286,7 @@ export async function getAssignedWorkItems(config, options = {}) {
             FROM WorkItems
             WHERE [System.AssignedTo] = @me
               ${stateFilter}
+              ${typeFilter}
             ORDER BY [System.ChangedDate] DESC`,
   };
 

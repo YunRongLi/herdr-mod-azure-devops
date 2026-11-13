@@ -61,6 +61,7 @@ export default class AzureDevOpsMod extends View {
     this.prThreadStatusFilter = "all";
 
     this.wiStatusFilter = "active";
+    this.wiTypeFilter = "all";
     this.workItems = [];
     this.selectedWI = null;
     this.wiComments = [];
@@ -156,6 +157,7 @@ export default class AzureDevOpsMod extends View {
         } else {
           const items = await getAssignedWorkItems(profile, {
             status: this.wiStatusFilter,
+            type: this.wiTypeFilter,
           });
           this.workItems = items;
 
@@ -458,8 +460,13 @@ export default class AzureDevOpsMod extends View {
         content = renderWIList({
           items: this.workItems,
           status: this.wiStatusFilter,
+          type: this.wiTypeFilter,
           onStatusChange: (s) => {
             this.wiStatusFilter = s;
+            this.refresh(this.cx || { notify: () => {} });
+          },
+          onTypeChange: (tp) => {
+            this.wiTypeFilter = tp;
             this.refresh(this.cx || { notify: () => {} });
           },
           onSelectItem: (item, cx) => {

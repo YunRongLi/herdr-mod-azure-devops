@@ -17,10 +17,32 @@ export function statusBadge(status, type = "pr", themeOverride = null) {
   let textColor = t.muted || "#9ca3af";
   let dotColor = null;
 
-  if (["active", "new", "in progress", "in_progress"].includes(normalized)) {
+  // Work item types
+  if (normalized === "task") {
+    bg = t.hover || "#2d2e34";
+    textColor = t.foreground || "#e5e7eb";
+    dotColor = t.ansi3 || "#e69900";
+  } else if (["bug", "issue"].includes(normalized)) {
+    bg = t.hover || "#2d2e34";
+    textColor = t.foreground || "#e5e7eb";
+    dotColor = t.status?.blocked || t.ansi1 || "#cc293d";
+  } else if (normalized === "feature") {
+    bg = t.hover || "#2d2e34";
+    textColor = t.foreground || "#e5e7eb";
+    dotColor = t.ansi5 || "#773b93";
+  } else if (["product backlog item", "pbi", "user story", "story"].includes(normalized)) {
+    bg = t.hover || "#2d2e34";
+    textColor = t.foreground || "#e5e7eb";
+    dotColor = t.ansi6 || t.accent || "#009ccc";
+  // Work item and PR states
+  } else if (["active", "in progress", "in_progress", "doing", "commited", "committed", "approved"].includes(normalized)) {
     bg = t.hover || "#2d2e34";
     textColor = t.accent || t.foreground || "#e5e7eb";
     dotColor = t.accent || t.status?.working || "#5b8def";
+  } else if (["todo", "to do", "not started", "not_started", "new", "proposed", "pending"].includes(normalized)) {
+    bg = t.chrome || "#252528";
+    textColor = t.muted || "#9ca3af";
+    dotColor = t.dim || "#8a8886";
   } else if (["completed", "done", "fixed", "closed", "resolved"].includes(normalized)) {
     bg = t.background || "#1a1b1e";
     textColor = t.muted || "#9ca3af";
@@ -29,10 +51,6 @@ export function statusBadge(status, type = "pr", themeOverride = null) {
     bg = t.background || "#1a1b1e";
     textColor = t.dim || "#6b7280";
     dotColor = t.status?.blocked || "#d9649a";
-  } else if (["bug", "issue"].includes(normalized)) {
-    bg = t.hover || "#2d2e34";
-    textColor = t.foreground || "#e5e7eb";
-    dotColor = t.status?.blocked || "#e3814f";
   }
 
   return h_flex()

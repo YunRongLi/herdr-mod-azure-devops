@@ -36,19 +36,23 @@ function renderSkeletonWICard(t) {
 }
 
 /**
- * List view of Work Items assigned to current user with status filter.
+ * List view of Work Items assigned to current user with type and state filters.
  *
  * @param {Object} props
  * @param {Array<any>} props.items Work items array
- * @param {"active" | "resolved" | "closed" | "wontfix" | "all"} [props.status]
+ * @param {string} [props.status="active"] Active work item state filter
+ * @param {string} [props.type="all"] Active work item type filter
  * @param {(status: string) => void} [props.onStatusChange]
+ * @param {(type: string) => void} [props.onTypeChange]
  * @param {(item: any, cx?: any) => void} props.onSelectItem Callback when a work item is clicked
  * @param {boolean} [props.loading]
  */
 export function renderWIList({
   items = [],
   status = "active",
+  type = "all",
   onStatusChange = () => {},
+  onTypeChange = () => {},
   onSelectItem,
   loading = false,
 }) {
@@ -125,35 +129,64 @@ export function renderWIList({
     .gap(8)
     .bg(t.chrome)
     .child(
-      h_flex()
+      v_flex()
         .w_full()
         .flex_none()
-        .items_center()
-        .justify_between()
-        .pb(4)
+        .gap(6)
+        .pb(6)
         .border_b(1)
         .border_color(t.border)
         .child(
-          div()
-            .text_size(11.5)
-            .font_medium()
-            .text_color(t.foreground)
-            .child("Assigned to Me")
+          h_flex()
+            .w_full()
+            .items_center()
+            .justify_between()
+            .gap(6)
+            .child(
+              div()
+                .text_size(11.5)
+                .font_medium()
+                .text_color(t.foreground)
+                .child("Assigned to Me")
+            )
+            .child(
+              statusFilter({
+                options: [
+                  { id: "all", label: "All Types" },
+                  { id: "task", label: "Task" },
+                  { id: "bug", label: "Bug" },
+                  { id: "feature", label: "Feature" },
+                  { id: "pbi", label: "PBI" },
+                ],
+                activeId: type,
+                onChange: onTypeChange,
+                height: 20,
+                textSize: 10,
+              })
+            )
         )
         .child(
-          statusFilter({
-            options: [
-              { id: "active", label: "Active" },
-              { id: "resolved", label: "Resolved" },
-              { id: "closed", label: "Closed" },
-              { id: "wontfix", label: "Won't Fix" },
-              { id: "all", label: "All" },
-            ],
-            activeId: status,
-            onChange: onStatusChange,
-            height: 22,
-            textSize: 10.5,
-          })
+          h_flex()
+            .w_full()
+            .overflow_x_scrollbar()
+            .child(
+              statusFilter({
+                options: [
+                  { id: "all", label: "All States" },
+                  { id: "active", label: "Active" },
+                  { id: "todo", label: "To Do" },
+                  { id: "in_progress", label: "In Progress" },
+                  { id: "committed", label: "Committed" },
+                  { id: "resolved", label: "Resolved" },
+                  { id: "not_started", label: "Not Started" },
+                  { id: "removed", label: "Removed" },
+                ],
+                activeId: status,
+                onChange: onStatusChange,
+                height: 20,
+                textSize: 10,
+              })
+            )
         )
     )
     .child(
@@ -186,9 +219,7 @@ export function renderWIList({
                   .font_medium()
                   .text_color(t.foreground)
                   .child(
-                    status === "all"
-                      ? "No work items assigned"
-                      : `No ${status} work items assigned`
+                    `No ${type === "all" ? "" : type + " "}work items matching ${status} state`
                   )
               )
               .child(
